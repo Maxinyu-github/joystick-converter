@@ -19,6 +19,7 @@ A versatile gamepad/joystick converter based on the RP2350-PiZero development bo
   - Keyboard mode
   - Mouse mode
   - Keyboard+Mouse combo mode
+- **Debug Mode**: Real-time visualization of gamepad input for identifying special buttons
 - **PC Configuration Tool**: GUI application for easy configuration
 - **Persistent Configuration**: Settings saved to flash memory
 
@@ -118,6 +119,31 @@ Then map a gamepad button to trigger this macro.
 ### Example 3: Analog Stick to Mouse
 
 Select "Mouse" or "Keyboard+Mouse" output mode. The right analog stick will automatically control mouse movement.
+
+## Debug Mode
+
+Debug mode helps you identify and test all gamepad inputs, including special buttons:
+
+1. Open configuration tool and connect to device
+2. Switch to "Debug Mode" tab
+3. Connect your gamepad
+4. Click "Start Debug Mode"
+5. Press buttons and move sticks to see real-time data
+
+The debug display shows:
+- All standard buttons with visual indicators
+- Analog stick positions with numeric values
+- Trigger pressure levels
+- D-pad direction
+- Raw button data (hex) for identifying unmapped buttons
+
+This is particularly useful for gamepads with special buttons like:
+- Joystick press buttons (LS/RS)
+- Back paddles on elite controllers
+- Extra mode/turbo buttons
+- Special function buttons
+
+See [Debug Mode Guide](docs/DEBUG_MODE.md) for detailed instructions.
 
 ## Technical Details
 
