@@ -9,6 +9,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "pico/stdlib.h"
 #include "pico/unique_id.h"
 #include "hardware/gpio.h"
@@ -29,10 +30,12 @@ typedef enum {
     STATE_WAITING_FOR_INPUT,
     STATE_ACTIVE,
     STATE_CONFIG_MODE,
+    STATE_DEBUG_MODE,
     STATE_ERROR
 } app_state_t;
 
 static app_state_t current_state = STATE_INIT;
+static bool debug_mode_enabled = false;
 
 /**
  * Initialize hardware peripherals
@@ -48,6 +51,60 @@ static void hardware_init(void) {
     
     printf("Joystick Converter Starting...\n");
     printf("Hardware: RP2350-PiZero\n");
+}
+
+/**
+ * Handle serial commands for debug mode
+ */
+static void handle_serial_commands(void) {
+    static char cmd_buffer[32];
+    static int cmd_pos = 0;
+    
+    // Check if data is available
+    int c = getchar_timeout_us(0);
+    if (c == PICO_ERROR_TIMEOUT) {
+        return;
+    }
+    
+    // Add character to buffer
+    if (c == '\n' || c == '\r') {
+        if (cmd_pos > 0) {
+            cmd_buffer[cmd_pos] = '\0';
+            
+            // Process command
+            if (strcmp(cmd_buffer, "DEBUG_START") == 0) {
+                debug_mode_enabled = true;
+                if (usb_host_device_connected()) {
+                    current_state = STATE_DEBUG_MODE;
+                }
+                printf("DEBUG_MODE_STARTED\n");
+            } else if (strcmp(cmd_buffer, "DEBUG_STOP") == 0) {
+                debug_mode_enabled = false;
+                if (current_state == STATE_DEBUG_MODE) {
+                    current_state = STATE_ACTIVE;
+                }
+                printf("DEBUG_MODE_STOPPED\n");
+            } else if (strcmp(cmd_buffer, "DEBUG_GET") == 0) {
+                // Send current gamepad state
+                if (debug_mode_enabled && usb_host_device_connected()) {
+                    gamepad_state_t state;
+                    if (usb_host_get_gamepad_state(&state)) {
+                        // Format: "DEBUG:buttons,lx,ly,rx,ry,lt,rt,dx,dy"
+                        printf("DEBUG:%u,%d,%d,%d,%d,%u,%u,%d,%d\n",
+                               state.buttons,
+                               state.left_x, state.left_y,
+                               state.right_x, state.right_y,
+                               state.left_trigger, state.right_trigger,
+                               state.dpad_x, state.dpad_y);
+                    }
+                }
+            }
+            
+            cmd_pos = 0;
+        }
+    } else if (cmd_pos < sizeof(cmd_buffer) - 1) {
+        cmd_buffer[cmd_pos++] = c;
+    }
 }
 
 /**
@@ -71,6 +128,9 @@ static void status_led_update(void) {
             break;
         case STATE_CONFIG_MODE:
             blink_interval = 200;  // Fast blink in config mode
+            break;
+        case STATE_DEBUG_MODE:
+            blink_interval = 300;  // Medium-fast blink in debug mode
             break;
         case STATE_ERROR:
             blink_interval = 100;  // Very fast blink on error
@@ -133,16 +193,25 @@ int main(void) {
         // Process USB device (output)
         usb_device_task();
         
-        // Process macro execution
-        macro_task();
+        // Process macro execution (skip in debug mode)
+        if (!debug_mode_enabled) {
+            macro_task();
+        }
+        
+        // Handle serial commands for debug mode
+        handle_serial_commands();
         
         // Update application state
         if (current_state == STATE_WAITING_FOR_INPUT) {
             if (usb_host_device_connected()) {
-                current_state = STATE_ACTIVE;
+                if (debug_mode_enabled) {
+                    current_state = STATE_DEBUG_MODE;
+                } else {
+                    current_state = STATE_ACTIVE;
+                }
                 printf("Gamepad connected!\n");
             }
-        } else if (current_state == STATE_ACTIVE) {
+        } else if (current_state == STATE_ACTIVE || current_state == STATE_DEBUG_MODE) {
             if (!usb_host_device_connected()) {
                 current_state = STATE_WAITING_FOR_INPUT;
                 printf("Gamepad disconnected\n");
