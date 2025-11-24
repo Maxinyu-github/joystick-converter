@@ -18,6 +18,7 @@
 #include "usb_device.h"
 #include "config.h"
 #include "remapping.h"
+#include "macro.h"
 
 // LED pin for status indication
 #define LED_PIN 25
@@ -116,6 +117,9 @@ int main(void) {
     // Initialize remapping engine
     remapping_init();
     
+    // Initialize macro system
+    macro_init();
+    
     printf("Initialization complete. Waiting for gamepad...\n");
     
     // Main loop
@@ -128,6 +132,9 @@ int main(void) {
         
         // Process USB device (output)
         usb_device_task();
+        
+        // Process macro execution
+        macro_task();
         
         // Update application state
         if (current_state == STATE_WAITING_FOR_INPUT) {
@@ -148,8 +155,8 @@ int main(void) {
             printf("Entering configuration mode\n");
         }
         
-        // Small delay to prevent busy waiting
-        tight_loop_contents();
+        // Small delay to prevent busy waiting and reduce power consumption
+        sleep_ms(1);
     }
     
     return 0;

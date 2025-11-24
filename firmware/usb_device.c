@@ -7,6 +7,16 @@
 #include <string.h>
 #include "pico/stdlib.h"
 
+// Forward declarations for TinyUSB types (will be replaced with actual includes when TinyUSB is integrated)
+#ifndef TUSB_H
+typedef enum {
+    HID_REPORT_TYPE_INVALID = 0,
+    HID_REPORT_TYPE_INPUT,
+    HID_REPORT_TYPE_OUTPUT,
+    HID_REPORT_TYPE_FEATURE
+} hid_report_type_t;
+#endif
+
 static output_type_t current_output_type = OUTPUT_TYPE_GAMEPAD;
 static bool config_mode_request = false;
 
