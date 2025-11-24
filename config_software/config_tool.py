@@ -8,13 +8,15 @@ GUI application for configuring the joystick converter device.
 import sys
 import serial
 import serial.tools.list_ports
+import struct
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QComboBox, QLabel, QTableWidget, QTableWidgetItem,
     QMessageBox, QGroupBox, QDialog, QDialogButtonBox, QFormLayout,
-    QSpinBox, QTextEdit
+    QSpinBox, QTextEdit, QTabWidget, QProgressBar, QCheckBox, QGridLayout
 )
 from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QFont
 
 
 class MacroEditorDialog(QDialog):
@@ -80,6 +82,8 @@ class ConfigTool(QMainWindow):
         self.serial_port = None
         self.button_mappings = []
         self.macros = []
+        self.debug_mode_active = False
+        self.last_gamepad_state = None
         
         self.init_ui()
         self.refresh_ports()
@@ -88,17 +92,22 @@ class ConfigTool(QMainWindow):
         self.port_refresh_timer = QTimer()
         self.port_refresh_timer.timeout.connect(self.refresh_ports)
         self.port_refresh_timer.start(2000)  # Refresh every 2 seconds
+        
+        # Debug mode polling timer
+        self.debug_timer = QTimer()
+        self.debug_timer.timeout.connect(self.poll_debug_data)
+        self.debug_timer.setInterval(50)  # Poll every 50ms for responsive input
     
     def init_ui(self):
         """Initialize user interface"""
         self.setWindowTitle("Joystick Converter Configuration Tool")
-        self.setMinimumSize(800, 600)
+        self.setMinimumSize(900, 700)
         
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
         
-        # Connection section
+        # Connection section (always visible at top)
         connection_group = QGroupBox("Connection")
         connection_layout = QHBoxLayout()
         
@@ -118,6 +127,14 @@ class ConfigTool(QMainWindow):
         connection_group.setLayout(connection_layout)
         main_layout.addWidget(connection_group)
         
+        # Create tab widget
+        self.tab_widget = QTabWidget()
+        main_layout.addWidget(self.tab_widget)
+        
+        # Configuration Tab
+        config_tab = QWidget()
+        config_layout = QVBoxLayout(config_tab)
+        
         # Output type section
         output_group = QGroupBox("Output Type")
         output_layout = QHBoxLayout()
@@ -130,7 +147,7 @@ class ConfigTool(QMainWindow):
         
         output_layout.addStretch()
         output_group.setLayout(output_layout)
-        main_layout.addWidget(output_group)
+        config_layout.addWidget(output_group)
         
         # Button mapping section
         mapping_group = QGroupBox("Button Mappings")
@@ -156,7 +173,7 @@ class ConfigTool(QMainWindow):
         mapping_layout.addLayout(mapping_buttons)
         
         mapping_group.setLayout(mapping_layout)
-        main_layout.addWidget(mapping_group)
+        config_layout.addWidget(mapping_group)
         
         # Macro section
         macro_group = QGroupBox("Macros")
@@ -186,9 +203,9 @@ class ConfigTool(QMainWindow):
         macro_layout.addLayout(macro_buttons)
         
         macro_group.setLayout(macro_layout)
-        main_layout.addWidget(macro_group)
+        config_layout.addWidget(macro_group)
         
-        # Control buttons
+        # Control buttons for config tab
         control_layout = QHBoxLayout()
         
         load_btn = QPushButton("Load from Device")
@@ -200,7 +217,328 @@ class ConfigTool(QMainWindow):
         control_layout.addWidget(save_btn)
         
         control_layout.addStretch()
-        main_layout.addLayout(control_layout)
+        config_layout.addLayout(control_layout)
+        
+        self.tab_widget.addTab(config_tab, "Configuration")
+        
+        # Debug Mode Tab
+        debug_tab = QWidget()
+        debug_layout = QVBoxLayout(debug_tab)
+        
+        # Debug control section
+        debug_control_group = QGroupBox("Debug Control")
+        debug_control_layout = QHBoxLayout()
+        
+        self.debug_start_btn = QPushButton("Start Debug Mode")
+        self.debug_start_btn.clicked.connect(self.toggle_debug_mode)
+        debug_control_layout.addWidget(self.debug_start_btn)
+        
+        self.debug_status_label = QLabel("Status: Not Active")
+        debug_control_layout.addWidget(self.debug_status_label)
+        
+        debug_control_layout.addStretch()
+        debug_control_group.setLayout(debug_control_layout)
+        debug_layout.addWidget(debug_control_group)
+        
+        # Info label
+        info_label = QLabel(
+            "Debug mode displays real-time joystick input. "
+            "This helps identify which buttons your gamepad supports, "
+            "including special buttons like joystick presses and back buttons."
+        )
+        info_label.setWordWrap(True)
+        debug_layout.addWidget(info_label)
+        
+        # Create debug display
+        self.init_debug_display(debug_layout)
+        
+        self.tab_widget.addTab(debug_tab, "Debug Mode")
+    
+    def init_debug_display(self, parent_layout):
+        """Initialize the debug display widgets"""
+        # Button status group
+        buttons_group = QGroupBox("Button States")
+        buttons_layout = QGridLayout()
+        
+        # Create checkboxes for each button
+        self.button_widgets = {}
+        button_names = [
+            ("A", 0, 0), ("B", 0, 1), ("X", 0, 2), ("Y", 0, 3),
+            ("LB", 1, 0), ("RB", 1, 1), ("Back", 1, 2), ("Start", 1, 3),
+            ("LS", 2, 0), ("RS", 2, 1)
+        ]
+        
+        for name, row, col in button_names:
+            checkbox = QCheckBox(name)
+            checkbox.setEnabled(False)
+            font = QFont()
+            font.setBold(True)
+            font.setPointSize(10)
+            checkbox.setFont(font)
+            buttons_layout.addWidget(checkbox, row, col)
+            self.button_widgets[name] = checkbox
+        
+        buttons_group.setLayout(buttons_layout)
+        parent_layout.addWidget(buttons_group)
+        
+        # Analog sticks group
+        analog_group = QGroupBox("Analog Sticks")
+        analog_layout = QGridLayout()
+        
+        # Left stick
+        analog_layout.addWidget(QLabel("Left Stick:"), 0, 0)
+        self.left_x_label = QLabel("X: 0")
+        self.left_y_label = QLabel("Y: 0")
+        analog_layout.addWidget(self.left_x_label, 0, 1)
+        analog_layout.addWidget(self.left_y_label, 0, 2)
+        
+        self.left_x_bar = QProgressBar()
+        self.left_x_bar.setRange(-32768, 32767)
+        self.left_x_bar.setValue(0)
+        analog_layout.addWidget(self.left_x_bar, 1, 1)
+        
+        self.left_y_bar = QProgressBar()
+        self.left_y_bar.setRange(-32768, 32767)
+        self.left_y_bar.setValue(0)
+        analog_layout.addWidget(self.left_y_bar, 1, 2)
+        
+        # Right stick
+        analog_layout.addWidget(QLabel("Right Stick:"), 2, 0)
+        self.right_x_label = QLabel("X: 0")
+        self.right_y_label = QLabel("Y: 0")
+        analog_layout.addWidget(self.right_x_label, 2, 1)
+        analog_layout.addWidget(self.right_y_label, 2, 2)
+        
+        self.right_x_bar = QProgressBar()
+        self.right_x_bar.setRange(-32768, 32767)
+        self.right_x_bar.setValue(0)
+        analog_layout.addWidget(self.right_x_bar, 3, 1)
+        
+        self.right_y_bar = QProgressBar()
+        self.right_y_bar.setRange(-32768, 32767)
+        self.right_y_bar.setValue(0)
+        analog_layout.addWidget(self.right_y_bar, 3, 2)
+        
+        analog_group.setLayout(analog_layout)
+        parent_layout.addWidget(analog_group)
+        
+        # Triggers group
+        triggers_group = QGroupBox("Triggers")
+        triggers_layout = QGridLayout()
+        
+        triggers_layout.addWidget(QLabel("Left Trigger:"), 0, 0)
+        self.left_trigger_label = QLabel("0")
+        triggers_layout.addWidget(self.left_trigger_label, 0, 1)
+        
+        self.left_trigger_bar = QProgressBar()
+        self.left_trigger_bar.setRange(0, 255)
+        self.left_trigger_bar.setValue(0)
+        triggers_layout.addWidget(self.left_trigger_bar, 1, 0, 1, 2)
+        
+        triggers_layout.addWidget(QLabel("Right Trigger:"), 2, 0)
+        self.right_trigger_label = QLabel("0")
+        triggers_layout.addWidget(self.right_trigger_label, 2, 1)
+        
+        self.right_trigger_bar = QProgressBar()
+        self.right_trigger_bar.setRange(0, 255)
+        self.right_trigger_bar.setValue(0)
+        triggers_layout.addWidget(self.right_trigger_bar, 3, 0, 1, 2)
+        
+        triggers_group.setLayout(triggers_layout)
+        parent_layout.addWidget(triggers_group)
+        
+        # D-pad group
+        dpad_group = QGroupBox("D-Pad")
+        dpad_layout = QHBoxLayout()
+        
+        self.dpad_label = QLabel("Center")
+        font = QFont()
+        font.setPointSize(12)
+        font.setBold(True)
+        self.dpad_label.setFont(font)
+        self.dpad_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        dpad_layout.addWidget(self.dpad_label)
+        
+        dpad_group.setLayout(dpad_layout)
+        parent_layout.addWidget(dpad_group)
+        
+        # Raw data display
+        raw_group = QGroupBox("Raw Button Data (Hex)")
+        raw_layout = QVBoxLayout()
+        
+        raw_info_label = QLabel("Displays raw button bitmap - useful for identifying unmapped buttons")
+        raw_info_label.setWordWrap(True)
+        raw_layout.addWidget(raw_info_label)
+        
+        self.raw_data_label = QLabel("0x0000")
+        font = QFont("Courier")
+        font.setPointSize(14)
+        font.setBold(True)
+        self.raw_data_label.setFont(font)
+        self.raw_data_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        raw_layout.addWidget(self.raw_data_label)
+        
+        raw_group.setLayout(raw_layout)
+        parent_layout.addWidget(raw_group)
+    
+    def toggle_debug_mode(self):
+        """Toggle debug mode on/off"""
+        if not self.serial_port or not self.serial_port.is_open:
+            QMessageBox.warning(self, "Error", "Not connected to device")
+            return
+        
+        self.debug_mode_active = not self.debug_mode_active
+        
+        if self.debug_mode_active:
+            # Start debug mode
+            try:
+                # Send debug mode command to device
+                self.serial_port.write(b"DEBUG_START\n")
+                self.debug_timer.start()
+                self.debug_start_btn.setText("Stop Debug Mode")
+                self.debug_status_label.setText("Status: Active")
+                self.statusBar().showMessage("Debug mode started")
+            except Exception as e:
+                self.debug_mode_active = False
+                QMessageBox.critical(self, "Error", f"Failed to start debug mode: {e}")
+        else:
+            # Stop debug mode
+            try:
+                self.serial_port.write(b"DEBUG_STOP\n")
+                self.debug_timer.stop()
+                self.debug_start_btn.setText("Start Debug Mode")
+                self.debug_status_label.setText("Status: Not Active")
+                self.statusBar().showMessage("Debug mode stopped")
+                self.reset_debug_display()
+            except Exception as e:
+                QMessageBox.warning(self, "Warning", f"Failed to stop debug mode: {e}")
+    
+    def poll_debug_data(self):
+        """Poll for debug data from device"""
+        if not self.serial_port or not self.serial_port.is_open:
+            return
+        
+        try:
+            # Request debug data
+            self.serial_port.write(b"DEBUG_GET\n")
+            
+            # Wait briefly for response
+            import time
+            time.sleep(0.01)
+            
+            # Read available data
+            if self.serial_port.in_waiting > 0:
+                line = self.serial_port.readline().decode('utf-8', errors='ignore').strip()
+                if line.startswith("DEBUG:"):
+                    self.parse_debug_data(line[6:])
+        except Exception as e:
+            # Silently ignore errors during polling to avoid spam
+            pass
+    
+    def parse_debug_data(self, data):
+        """Parse debug data string and update display"""
+        try:
+            # Expected format: "buttons,lx,ly,rx,ry,lt,rt,dx,dy"
+            parts = data.split(',')
+            if len(parts) >= 9:
+                buttons = int(parts[0])
+                left_x = int(parts[1])
+                left_y = int(parts[2])
+                right_x = int(parts[3])
+                right_y = int(parts[4])
+                left_trigger = int(parts[5])
+                right_trigger = int(parts[6])
+                dpad_x = int(parts[7])
+                dpad_y = int(parts[8])
+                
+                self.update_debug_display(buttons, left_x, left_y, right_x, right_y,
+                                         left_trigger, right_trigger, dpad_x, dpad_y)
+        except Exception as e:
+            # Ignore parse errors
+            pass
+    
+    def update_debug_display(self, buttons, left_x, left_y, right_x, right_y,
+                            left_trigger, right_trigger, dpad_x, dpad_y):
+        """Update debug display with gamepad state"""
+        # Update button states
+        button_map = {
+            "A": 0x0001,
+            "B": 0x0002,
+            "X": 0x0004,
+            "Y": 0x0008,
+            "LB": 0x0010,
+            "RB": 0x0020,
+            "Back": 0x0040,
+            "Start": 0x0080,
+            "LS": 0x0100,
+            "RS": 0x0200
+        }
+        
+        for name, mask in button_map.items():
+            pressed = (buttons & mask) != 0
+            self.button_widgets[name].setChecked(pressed)
+            if pressed:
+                self.button_widgets[name].setStyleSheet("QCheckBox { color: green; font-weight: bold; }")
+            else:
+                self.button_widgets[name].setStyleSheet("")
+        
+        # Update analog sticks
+        self.left_x_label.setText(f"X: {left_x}")
+        self.left_y_label.setText(f"Y: {left_y}")
+        self.left_x_bar.setValue(left_x)
+        self.left_y_bar.setValue(left_y)
+        
+        self.right_x_label.setText(f"X: {right_x}")
+        self.right_y_label.setText(f"Y: {right_y}")
+        self.right_x_bar.setValue(right_x)
+        self.right_y_bar.setValue(right_y)
+        
+        # Update triggers
+        self.left_trigger_label.setText(str(left_trigger))
+        self.left_trigger_bar.setValue(left_trigger)
+        self.right_trigger_label.setText(str(right_trigger))
+        self.right_trigger_bar.setValue(right_trigger)
+        
+        # Update D-pad
+        dpad_text = "Center"
+        if dpad_y < 0:
+            dpad_text = "Up"
+        elif dpad_y > 0:
+            dpad_text = "Down"
+        
+        if dpad_x < 0:
+            dpad_text = "Left" if dpad_text == "Center" else dpad_text + "-Left"
+        elif dpad_x > 0:
+            dpad_text = "Right" if dpad_text == "Center" else dpad_text + "-Right"
+        
+        self.dpad_label.setText(dpad_text)
+        
+        # Update raw data
+        self.raw_data_label.setText(f"0x{buttons:04X}")
+    
+    def reset_debug_display(self):
+        """Reset all debug display widgets to default state"""
+        for checkbox in self.button_widgets.values():
+            checkbox.setChecked(False)
+            checkbox.setStyleSheet("")
+        
+        self.left_x_label.setText("X: 0")
+        self.left_y_label.setText("Y: 0")
+        self.left_x_bar.setValue(0)
+        self.left_y_bar.setValue(0)
+        
+        self.right_x_label.setText("X: 0")
+        self.right_y_label.setText("Y: 0")
+        self.right_x_bar.setValue(0)
+        self.right_y_bar.setValue(0)
+        
+        self.left_trigger_label.setText("0")
+        self.left_trigger_bar.setValue(0)
+        self.right_trigger_label.setText("0")
+        self.right_trigger_bar.setValue(0)
+        
+        self.dpad_label.setText("Center")
+        self.raw_data_label.setText("0x0000")
     
     def refresh_ports(self):
         """Refresh available serial ports"""
@@ -241,6 +579,12 @@ class ConfigTool(QMainWindow):
     
     def disconnect_device(self):
         """Disconnect from device"""
+        # Stop debug mode if active
+        if self.debug_mode_active:
+            self.debug_mode_active = False
+            self.debug_timer.stop()
+            self.reset_debug_display()
+        
         if self.serial_port:
             self.serial_port.close()
             self.serial_port = None
