@@ -1,0 +1,38 @@
+# Build directories
+build/
+cmake-build-*/
+
+# Generated files
+*.elf
+*.bin
+*.hex
+*.uf2
+*.map
+*.dis
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Pico SDK
+pico-sdk/
