@@ -53,16 +53,26 @@ static void hardware_init(void) {
     printf("Hardware: RP2350-PiZero\n");
 }
 
+// Command buffer size for serial commands
+#define CMD_BUFFER_SIZE 32
+
 /**
  * Handle serial commands for debug mode
  */
 static void handle_serial_commands(void) {
-    static char cmd_buffer[32];
+    static char cmd_buffer[CMD_BUFFER_SIZE];
     static int cmd_pos = 0;
     
     // Check if data is available
     int c = getchar_timeout_us(0);
     if (c == PICO_ERROR_TIMEOUT) {
+        return;
+    }
+    
+    // Validate character is printable or newline
+    if (c < 0 || (c > 127 && c != '\n' && c != '\r')) {
+        // Invalid character, reset buffer
+        cmd_pos = 0;
         return;
     }
     
@@ -102,8 +112,14 @@ static void handle_serial_commands(void) {
             
             cmd_pos = 0;
         }
-    } else if (cmd_pos < sizeof(cmd_buffer) - 1) {
-        cmd_buffer[cmd_pos++] = c;
+    } else if (cmd_pos < CMD_BUFFER_SIZE - 1) {
+        // Only add printable characters
+        if (c >= 32 && c < 127) {
+            cmd_buffer[cmd_pos++] = (char)c;
+        }
+    } else {
+        // Buffer full, reset to prevent overflow
+        cmd_pos = 0;
     }
 }
 

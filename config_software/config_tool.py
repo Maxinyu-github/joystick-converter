@@ -6,9 +6,9 @@ GUI application for configuring the joystick converter device.
 """
 
 import sys
+import time
 import serial
 import serial.tools.list_ports
-import struct
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QComboBox, QLabel, QTableWidget, QTableWidgetItem,
@@ -423,7 +423,6 @@ class ConfigTool(QMainWindow):
             self.serial_port.write(b"DEBUG_GET\n")
             
             # Wait briefly for response
-            import time
             time.sleep(0.01)
             
             # Read available data
