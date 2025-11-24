@@ -56,7 +56,9 @@ void remapping_process_input(const gamepad_state_t *input) {
                             printf("Remapping: Button 0x%04X -> Key 0x%02X\n", 
                                    button_bit, keycode);
                         } else {
-                            usb_device_send_keyboard(0, NULL, 0);
+                            // Release all keys - pass empty array
+                            uint8_t no_keys = 0;
+                            usb_device_send_keyboard(0, &no_keys, 0);
                         }
                         break;
                         

@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "pico/stdlib.h"
+#include "pico/platform.h"
 #include "hardware/flash.h"
 #include "hardware/sync.h"
 

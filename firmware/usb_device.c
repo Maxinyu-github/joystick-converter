@@ -7,7 +7,11 @@
 #include <string.h>
 #include "pico/stdlib.h"
 
-// Forward declarations for TinyUSB types (will be replaced with actual includes when TinyUSB is integrated)
+// Forward declarations for TinyUSB types
+// TODO: Replace with actual TinyUSB includes when library is integrated:
+//       #include "tusb.h"
+//       #include "class/hid/hid.h"
+// These forward declarations prevent compilation errors until TinyUSB is fully integrated
 #ifndef TUSB_H
 typedef enum {
     HID_REPORT_TYPE_INVALID = 0,
