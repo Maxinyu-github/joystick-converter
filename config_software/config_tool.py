@@ -495,10 +495,10 @@ class ConfigTool(QMainWindow):
             # Request debug data
             self.serial_port.write(b"DEBUG_GET\n")
             
-            # Wait briefly for response
-            time.sleep(0.01)
+            # Process pending Qt events to keep GUI responsive
+            QApplication.processEvents()
             
-            # Read available data
+            # Read available data (non-blocking check)
             if self.serial_port.in_waiting > 0:
                 line = self.serial_port.readline().decode('utf-8', errors='ignore').strip()
                 if line.startswith("DEBUG:"):
@@ -743,21 +743,32 @@ class ConfigTool(QMainWindow):
             # Request logs
             self.serial_port.write(b"LOG_GET\n")
             
-            # Wait for response
-            time.sleep(0.1)
+            # Process events while waiting for response
+            start_time = time.time()
+            while self.serial_port.in_waiting == 0:
+                QApplication.processEvents()
+                if time.time() - start_time > 1.0:  # 1 second timeout for initial response
+                    self.log_text.setPlainText("(No response from device)")
+                    self.statusBar().showMessage("No response from device")
+                    return
+                time.sleep(0.01)
             
             # Read response
             logs = []
             in_log_block = False
-            timeout_count = 0
-            max_timeout = 50  # 5 seconds max
+            last_data_time = time.time()
+            max_timeout = 5.0  # 5 seconds max total
             
-            while timeout_count < max_timeout:
+            while time.time() - last_data_time < max_timeout:
+                # Process Qt events to keep GUI responsive
+                QApplication.processEvents()
+                
                 if self.serial_port.in_waiting > 0:
                     line = self.serial_port.readline().decode('utf-8', errors='ignore').strip()
                     
                     if line == "LOG_START":
                         in_log_block = True
+                        last_data_time = time.time()
                         continue
                     elif line == "LOG_END":
                         break
@@ -768,10 +779,9 @@ class ConfigTool(QMainWindow):
                     elif in_log_block:
                         logs.append(line)
                     
-                    timeout_count = 0  # Reset timeout on data received
+                    last_data_time = time.time()
                 else:
-                    time.sleep(0.1)
-                    timeout_count += 1
+                    time.sleep(0.01)
             
             if logs:
                 self.log_text.setPlainText("\n".join(logs))
@@ -795,9 +805,17 @@ class ConfigTool(QMainWindow):
         
         try:
             self.serial_port.write(b"LOG_CLEAR\n")
-            time.sleep(0.1)
             
-            # Read response
+            # Wait for response with event processing
+            start_time = time.time()
+            while self.serial_port.in_waiting == 0:
+                QApplication.processEvents()
+                if time.time() - start_time > 1.0:
+                    self.statusBar().showMessage("No response from device")
+                    return
+                time.sleep(0.01)
+            
+            # Read response (data is available from the loop above)
             if self.serial_port.in_waiting > 0:
                 response = self.serial_port.readline().decode('utf-8', errors='ignore').strip()
                 if response == "LOG_CLEARED":
@@ -847,8 +865,17 @@ class ConfigTool(QMainWindow):
         try:
             command = f"LOG_LEVEL {index}\n"
             self.serial_port.write(command.encode())
-            time.sleep(0.1)
             
+            # Wait for response with event processing
+            start_time = time.time()
+            while self.serial_port.in_waiting == 0:
+                QApplication.processEvents()
+                if time.time() - start_time > 1.0:
+                    self.statusBar().showMessage("No response from device")
+                    return
+                time.sleep(0.01)
+            
+            # Read response (data is available from the loop above)
             if self.serial_port.in_waiting > 0:
                 response = self.serial_port.readline().decode('utf-8', errors='ignore').strip()
                 if response.startswith("LOG_LEVEL_SET:"):
@@ -868,8 +895,17 @@ class ConfigTool(QMainWindow):
         try:
             self.serial_port.reset_input_buffer()
             self.serial_port.write(b"LOG_STATUS\n")
-            time.sleep(0.1)
             
+            # Wait for response with event processing
+            start_time = time.time()
+            while self.serial_port.in_waiting == 0:
+                QApplication.processEvents()
+                if time.time() - start_time > 1.0:
+                    self.statusBar().showMessage("No response from device")
+                    return
+                time.sleep(0.01)
+            
+            # Read response (data is available from the loop above)
             if self.serial_port.in_waiting > 0:
                 response = self.serial_port.readline().decode('utf-8', errors='ignore').strip()
                 if response.startswith("LOG_STATUS:"):
