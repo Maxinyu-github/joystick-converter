@@ -2,11 +2,12 @@
 
 ## Overview
 
-Debug mode is a feature that allows you to view real-time joystick input data from the configuration software. This is particularly useful for:
+Debug mode is a feature that allows you to view real-time input device data from the configuration software. This is particularly useful for:
 - Identifying which buttons your gamepad supports
 - Detecting special buttons (joystick presses, back buttons, extra buttons)
 - Troubleshooting button mapping issues
 - Understanding the raw data from different gamepad models
+- Testing input functionality with a keyboard
 
 ## Features
 
@@ -16,6 +17,23 @@ The debug mode displays:
 - **Triggers**: Pressure values for left and right triggers (0-255)
 - **D-Pad**: Current direction indicator
 - **Raw Button Data**: Hexadecimal button bitmap for identifying unmapped buttons
+- **Keyboard Input**: Support for keyboard as input device for debugging
+- **Device Info**: Display connected device VID/PID and device type
+
+## Supported Input Devices
+
+### Gamepads
+- Nintendo Switch Pro Controller
+- Nintendo Switch Pro Controller 2
+- Xbox 360/One/Series Controllers
+- PlayStation 3/4/5 Controllers
+- Generic USB Gamepads
+
+### Keyboards
+Keyboards can be used as debug input devices to test if input functionality is working correctly. When a keyboard is connected:
+- Modifier key states are displayed (Ctrl, Alt, Shift, GUI)
+- Currently pressed key codes are shown (up to 6)
+- Useful for verifying that input channels are working properly
 
 ## How to Use Debug Mode
 
@@ -117,22 +135,37 @@ Debug mode uses a simple text-based protocol over serial (115200 baud):
 ```
 DEBUG_START\n    - Enable debug mode
 DEBUG_STOP\n     - Disable debug mode
-DEBUG_GET\n      - Request current gamepad state
+DEBUG_GET\n      - Request current input state (gamepad or keyboard)
+DEBUG_INFO\n     - Request connected device info
 ```
 
 **Responses** (Device → PC):
 ```
 DEBUG_MODE_STARTED\n                              - Confirmation
 DEBUG_MODE_STOPPED\n                              - Confirmation
-DEBUG:buttons,lx,ly,rx,ry,lt,rt,dx,dy\n          - State data
+DEBUG:buttons,lx,ly,rx,ry,lt,rt,dx,dy\n          - Gamepad state data
+DEBUG_KB:modifiers,num_keys,k0,k1,k2,k3,k4,k5\n  - Keyboard state data
+DEBUG_INFO:vid,pid,addr,type\n                   - Device info
+DEBUG_INFO:NO_DEVICE\n                           - No device connected
 ```
 
-**State Data Format**:
+**Gamepad State Data Format**:
 - `buttons`: 16-bit button bitmap (unsigned integer)
 - `lx`, `ly`: Left stick X/Y (-32768 to 32767)
 - `rx`, `ry`: Right stick X/Y (-32768 to 32767)
 - `lt`, `rt`: Left/Right triggers (0-255)
 - `dx`, `dy`: D-pad X/Y (-1, 0, 1)
+
+**Keyboard State Data Format**:
+- `modifiers`: Modifier key bitmap (Ctrl=0x01, Shift=0x02, Alt=0x04, GUI=0x08)
+- `num_keys`: Number of keys currently pressed
+- `k0-k5`: Key codes (USB HID key codes)
+
+**Device Info Format**:
+- `vid`: Vendor ID (hexadecimal)
+- `pid`: Product ID (hexadecimal)
+- `addr`: USB device address
+- `type`: Input type (0=Unknown, 1=Gamepad, 2=Keyboard)
 
 ### Polling Rate
 
