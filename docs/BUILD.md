@@ -39,11 +39,9 @@
    export PICO_SDK_PATH=/path/to/pico-sdk
    ```
 
-4. **Pico-PIO-USB Library** (for dual USB support)
-   ```bash
-   # Clone Pico-PIO-USB into SDK's lib directory
-   git clone https://github.com/sekigon-gonnoc/Pico-PIO-USB.git $PICO_SDK_PATH/lib/Pico-PIO-USB
-   ```
+4. **Pico-PIO-USB Library** (auto-fetched during build)
+   
+   The Pico-PIO-USB library is automatically downloaded during the CMake configuration step if not already present. No manual installation required.
 
 ### Optional Tools
 

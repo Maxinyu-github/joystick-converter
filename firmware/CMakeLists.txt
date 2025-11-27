@@ -1,39 +1,53 @@
 # Pico-PIO-USB library path
-# The library needs to be cloned separately at SDK lib level or provided via CMake variable
+# The library can be provided via CMake variable, or will be auto-fetched
 if(NOT DEFINED PICO_PIO_USB_PATH)
     set(PICO_PIO_USB_PATH ${PICO_SDK_PATH}/lib/Pico-PIO-USB)
 endif()
 
-# Check if Pico-PIO-USB exists
+# Track whether we need to create our own target
+set(PICO_PIO_USB_CREATE_TARGET TRUE)
+
+# Check if Pico-PIO-USB exists, if not fetch it automatically
 if(NOT EXISTS ${PICO_PIO_USB_PATH}/src/pio_usb.h)
-    message(FATAL_ERROR "Pico-PIO-USB not found at ${PICO_PIO_USB_PATH}. "
-        "Please clone it: git clone https://github.com/sekigon-gonnoc/Pico-PIO-USB.git ${PICO_PIO_USB_PATH}")
+    message(STATUS "Pico-PIO-USB not found at ${PICO_PIO_USB_PATH}, fetching from GitHub...")
+    include(FetchContent)
+    FetchContent_Declare(
+        pico_pio_usb_fetch
+        GIT_REPOSITORY https://github.com/sekigon-gonnoc/Pico-PIO-USB.git
+        GIT_TAG main
+        SOURCE_DIR ${PICO_PIO_USB_PATH}
+    )
+    FetchContent_MakeAvailable(pico_pio_usb_fetch)
+    # FetchContent already created the pico_pio_usb target
+    set(PICO_PIO_USB_CREATE_TARGET FALSE)
 endif()
 
 # TinyUSB path (from Pico SDK)
 set(PICO_TINYUSB_PATH ${PICO_SDK_PATH}/lib/tinyusb)
 
-# Add Pico-PIO-USB library
-add_library(pico_pio_usb STATIC
-    ${PICO_PIO_USB_PATH}/src/pio_usb.c
-    ${PICO_PIO_USB_PATH}/src/pio_usb_host.c
-    ${PICO_PIO_USB_PATH}/src/usb_crc.c
-)
+# Only create pico_pio_usb target if it doesn't exist (e.g., when library was pre-installed)
+if(PICO_PIO_USB_CREATE_TARGET AND NOT TARGET pico_pio_usb)
+    add_library(pico_pio_usb STATIC
+        ${PICO_PIO_USB_PATH}/src/pio_usb.c
+        ${PICO_PIO_USB_PATH}/src/pio_usb_host.c
+        ${PICO_PIO_USB_PATH}/src/usb_crc.c
+    )
 
-target_include_directories(pico_pio_usb PUBLIC
-    ${PICO_PIO_USB_PATH}/src
-)
+    target_include_directories(pico_pio_usb PUBLIC
+        ${PICO_PIO_USB_PATH}/src
+    )
 
-target_link_libraries(pico_pio_usb PUBLIC
-    pico_stdlib
-    hardware_pio
-    hardware_dma
-)
+    target_link_libraries(pico_pio_usb PUBLIC
+        pico_stdlib
+        hardware_pio
+        hardware_dma
+    )
 
-# Use TinyUSB implementation for PIO-USB
-target_compile_definitions(pico_pio_usb PUBLIC
-    PIO_USB_USE_TINYUSB
-)
+    # Use TinyUSB implementation for PIO-USB
+    target_compile_definitions(pico_pio_usb PUBLIC
+        PIO_USB_USE_TINYUSB
+    )
+endif()
 
 # Main executable
 add_executable(joystick_converter
