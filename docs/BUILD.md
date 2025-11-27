@@ -180,14 +180,19 @@ pyinstaller --onefile --windowed config_tool.py
 
 ### Serial Debug Output
 
-The firmware outputs debug information via UART:
+The firmware outputs debug information via UART (GPIO0/GPIO1):
+
+**Note**: Since TinyUSB Host is integrated, the USB port is used for gamepad input. Serial communication requires a USB-to-UART adapter connected to:
+- **TX**: GPIO0
+- **RX**: GPIO1
+- **Baud rate**: 115200
 
 ```bash
-# Linux
-minicom -b 115200 -D /dev/ttyACM0
+# Linux (with USB-to-UART adapter)
+minicom -b 115200 -D /dev/ttyUSB0
 
 # macOS
-screen /dev/tty.usbmodem* 115200
+screen /dev/tty.usbserial* 115200
 
 # Windows (PuTTY)
 # Use COM port with 115200 baud rate

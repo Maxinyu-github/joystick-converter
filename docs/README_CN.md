@@ -255,7 +255,8 @@ mouse_button_release
 
 ## 开发计划
 
-- [ ] 完整的TinyUSB集成
+- [x] TinyUSB Host集成
+- [ ] PIO-USB设备输出集成
 - [ ] 支持更多手柄类型
 - [ ] 配置文件导入/导出
 - [ ] 宏录制功能

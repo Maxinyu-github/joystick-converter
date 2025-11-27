@@ -52,13 +52,17 @@ sudo chmod 666 /dev/ttyACM0
 - Devices work on PC but not detected by the converter
 
 **Solutions**:
-1. **USB Host Integration Status**: The current firmware uses placeholder implementations for USB Host functionality. The TinyUSB host library integration is pending. The USB callbacks (`tuh_hid_mount_cb`, `tuh_hid_umount_cb`, etc.) are defined but not yet called because TinyUSB host is not linked in the build.
-2. **PIO-USB Note**: For RP2350-PiZero boards using PIO-USB (software USB via GPIO pins), additional configuration is required:
+1. **USB Host Integration**: TinyUSB host is now integrated. Serial communication uses UART instead of USB CDC due to the single USB controller limitation.
+2. **UART Connection**: For serial communication with the configuration tool, connect via UART pins instead of USB. Default UART configuration:
+   - TX: GPIO0
+   - RX: GPIO1
+   - Baud rate: 115200
+3. **PIO-USB Note**: For RP2350-PiZero boards using PIO-USB (software USB via GPIO pins), additional configuration is required:
    - PIO-USB uses GPIO pins instead of the hardware USB controller
    - The firmware needs to be configured with the correct GPIO pins for your board
    - Ensure you're connecting to the PIO-USB pins, not the hardware USB port
-3. **Cable Requirements**: Use a proper USB data cable, not a power-only cable
-4. **Check CMakeLists.txt**: Verify that `tinyusb_host` is uncommented in `firmware/CMakeLists.txt` when the integration is complete
+4. **Cable Requirements**: Use a proper USB data cable, not a power-only cable
+5. **Check Build**: TinyUSB host is now integrated and should be linked in the build automatically
 
 ### Gamepad Not Detected
 
