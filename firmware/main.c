@@ -4,7 +4,9 @@
  * This firmware converts gamepad inputs to compatible outputs for various devices.
  * Supports button remapping and complex mouse macro functionality.
  * 
- * Hardware: RP2350-PiZero with PiPUSB and Type-C connectivity
+ * Hardware: Waveshare RP2350-PiZero with dual USB:
+ * - Native USB (Type-C): USB Device for HID output + CDC serial (connects to PC)
+ * - PIO-USB (Type-C): USB Host for controller input
  */
 
 #include <stdio.h>
@@ -12,8 +14,10 @@
 #include <string.h>
 #include "pico/stdlib.h"
 #include "pico/unique_id.h"
+#include "pico/multicore.h"
 #include "hardware/gpio.h"
 #include "hardware/watchdog.h"
+#include "hardware/clocks.h"
 
 #include "usb_host.h"
 #include "usb_device.h"
@@ -42,7 +46,14 @@ static bool debug_mode_enabled = false;
  * Initialize hardware peripherals
  */
 static void hardware_init(void) {
-    // Initialize stdio for debugging
+    // Set system clock to 120MHz for PIO-USB compatibility
+    // PIO-USB requires the system clock to be a multiple of 12MHz
+    set_sys_clock_khz(120000, true);
+    
+    // Small delay for clock stabilization
+    sleep_ms(10);
+    
+    // Initialize stdio for debugging (uses USB CDC)
     stdio_init_all();
     
     // Initialize LED
@@ -51,7 +62,8 @@ static void hardware_init(void) {
     gpio_put(LED_PIN, 1);
     
     printf("Joystick Converter Starting...\n");
-    printf("Hardware: RP2350-PiZero\n");
+    printf("Hardware: Waveshare RP2350-PiZero (Dual USB)\n");
+    printf("System clock: %lu Hz\n", clock_get_hz(clk_sys));
 }
 
 // Command buffer size for serial commands

@@ -2,10 +2,14 @@
  * TinyUSB Configuration
  * 
  * This file configures TinyUSB for the Joystick Converter project.
- * The project uses:
- * - USB Host for reading gamepad/keyboard input
- * - USB Device for outputting HID reports (gamepad/keyboard/mouse)
- * - CDC for serial communication with PC configuration tool
+ * 
+ * The project uses dual USB:
+ * - Native USB (Port 0): USB Device for HID output (gamepad/keyboard/mouse) + CDC serial
+ * - PIO-USB (Port 1): USB Host for reading gamepad/keyboard input from controller
+ * 
+ * This configuration is designed for Waveshare RP2350-PiZero which has:
+ * - Type-C USB port connected to PC/gaming machine (native USB device)
+ * - PIO-USB port connected to controller (USB host via PIO)
  */
 
 #ifndef TUSB_CONFIG_H
@@ -34,27 +38,63 @@ extern "C" {
 #endif
 
 // Memory alignment for USB buffers
+#ifndef CFG_TUSB_MEM_SECTION
+#define CFG_TUSB_MEM_SECTION
+#endif
+
 #ifndef CFG_TUSB_MEM_ALIGN
 #define CFG_TUSB_MEM_ALIGN    __attribute__ ((aligned(4)))
 #endif
 
 //--------------------------------------------------------------------
-// USB Host Configuration
+// USB Device Configuration (Native USB - Port 0)
+// Connected to PC/gaming machine
+//--------------------------------------------------------------------
+
+// Enable USB Device stack
+#define CFG_TUD_ENABLED       1
+
+// RHPort number for device (0 = native USB controller)
+#define BOARD_TUD_RHPORT      0
+
+// Device uses Full Speed
+#define BOARD_TUD_MAX_SPEED   OPT_MODE_FULL_SPEED
+#define CFG_TUD_MAX_SPEED     BOARD_TUD_MAX_SPEED
+
+// Device endpoint 0 size
+#define CFG_TUD_ENDPOINT0_SIZE    64
+
+// Device class configuration
+#define CFG_TUD_CDC           1  // CDC for serial communication
+#define CFG_TUD_HID           1  // HID for gamepad/keyboard/mouse output
+#define CFG_TUD_MSC           0
+#define CFG_TUD_MIDI          0
+#define CFG_TUD_VENDOR        0
+
+// CDC FIFO size
+#define CFG_TUD_CDC_RX_BUFSIZE    256
+#define CFG_TUD_CDC_TX_BUFSIZE    256
+#define CFG_TUD_CDC_EP_BUFSIZE    64
+
+// HID buffer size
+#define CFG_TUD_HID_EP_BUFSIZE    64
+
+//--------------------------------------------------------------------
+// USB Host Configuration (PIO-USB - Port 1)
+// Connected to controller via PIO-USB
 //--------------------------------------------------------------------
 
 // Enable USB Host stack
 #define CFG_TUH_ENABLED       1
 
-// RHPort number for host (0 or 1)
-#ifndef BOARD_TUH_RHPORT
-#define BOARD_TUH_RHPORT      0
-#endif
+// Enable PIO-USB for host
+#define CFG_TUH_RPI_PIO_USB   1
 
-// Maximum operational speed for host
-#ifndef BOARD_TUH_MAX_SPEED
+// RHPort number for host (1 = PIO-USB)
+#define BOARD_TUH_RHPORT      1
+
+// Maximum operational speed for host (Full Speed for PIO-USB)
 #define BOARD_TUH_MAX_SPEED   OPT_MODE_FULL_SPEED
-#endif
-
 #define CFG_TUH_MAX_SPEED     BOARD_TUH_MAX_SPEED
 
 // Host memory section and alignment
@@ -87,18 +127,15 @@ extern "C" {
 #define CFG_TUH_HID_EPOUT_BUFSIZE   64
 
 //--------------------------------------------------------------------
-// USB Device Configuration (currently disabled)
+// PIO-USB Configuration
+// Default GPIO pins for PIO-USB D+/D-
 //--------------------------------------------------------------------
 
-// Note: USB Device is disabled for now because the RP2040/RP2350 has
-// only one USB controller. To use both Host and Device simultaneously,
-// PIO-USB would be needed for one of them. For initial TinyUSB integration,
-// we focus on USB Host functionality for reading gamepad input.
-// 
-// The stdio_usb (CDC serial) is handled separately by the Pico SDK
-// when pico_enable_stdio_usb is enabled.
-
-#define CFG_TUD_ENABLED       0
+// PIO-USB D+ pin (D- is D+ + 1, so GPIO0 for D+, GPIO1 for D-)
+// These pins connect to the controller via the PIO-USB Type-C port
+#ifndef PIO_USB_DP_PIN_DEFAULT
+#define PIO_USB_DP_PIN_DEFAULT    0
+#endif
 
 #ifdef __cplusplus
 }

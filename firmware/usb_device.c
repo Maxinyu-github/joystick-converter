@@ -1,11 +1,12 @@
 /**
  * USB Device Module Implementation
  * 
- * This module provides USB device output functionality.
- * Note: USB Device functionality requires separate USB controller from USB Host.
- * On RP2040/RP2350 with single USB controller, full dual USB support would
- * require PIO-USB for one role. The stdio_usb (CDC serial) is handled by
- * the Pico SDK separately.
+ * This module provides USB device output functionality using the native USB controller.
+ * The device presents as a composite USB device with CDC (serial) and HID interfaces.
+ * 
+ * Hardware Configuration for Waveshare RP2350-PiZero:
+ * - Native USB (Port 0): USB Device for HID output + CDC serial (connects to PC)
+ * - PIO-USB (Port 1): USB Host for controller input (handled by usb_host.c)
  */
 
 #include "usb_device.h"
@@ -13,66 +14,140 @@
 #include <string.h>
 #include "pico/stdlib.h"
 #include "tusb.h"
+#include "logging.h"
 
 static output_type_t current_output_type = OUTPUT_TYPE_GAMEPAD;
 static bool config_mode_request = false;
 
+// HID Report IDs (must match usb_descriptors.c)
+#define REPORT_ID_GAMEPAD   1
+#define REPORT_ID_KEYBOARD  2
+#define REPORT_ID_MOUSE     3
+
+// Gamepad report structure
+typedef struct __attribute__((packed)) {
+    uint8_t report_id;
+    uint16_t buttons;
+    int16_t left_x;
+    int16_t left_y;
+    int16_t right_x;
+    int16_t right_y;
+    uint8_t left_trigger;
+    uint8_t right_trigger;
+    uint8_t hat;  // D-pad hat switch (0-7 for directions, 8 for center)
+} gamepad_report_t;
+
+// Keyboard report structure
+typedef struct __attribute__((packed)) {
+    uint8_t report_id;
+    uint8_t modifiers;
+    uint8_t reserved;
+    uint8_t keycodes[6];
+} keyboard_report_t;
+
+// Mouse report structure
+typedef struct __attribute__((packed)) {
+    uint8_t report_id;
+    uint8_t buttons;
+    int8_t x;
+    int8_t y;
+    int8_t wheel;
+} mouse_report_t;
+
 bool usb_device_init(void) {
-    printf("USB Device: Initializing...\n");
+    LOG_INFO("USB Device: Initializing native USB device stack...");
     
-    // Note: USB Device stack initialization is currently not enabled because
-    // the RP2040/RP2350 has only one USB controller. When pico_enable_stdio_usb
-    // is enabled, it uses the USB controller for CDC serial communication.
-    // For full USB Device HID output, PIO-USB would be needed as a second
-    // USB controller, or stdio would need to use UART instead.
+    // Initialize TinyUSB device stack on native USB (port 0)
+    if (!tud_init(BOARD_TUD_RHPORT)) {
+        LOG_ERROR("USB Device: Failed to initialize TinyUSB device");
+        return false;
+    }
     
     config_mode_request = false;
     
-    printf("USB Device: Initialized (device output disabled, using CDC for serial)\n");
+    LOG_INFO("USB Device: Native USB device stack initialized on port %d", BOARD_TUD_RHPORT);
     return true;
 }
 
 void usb_device_task(void) {
-    // USB device task is currently handled by stdio_usb in the Pico SDK
-    // for CDC serial communication. Full HID device output would require
-    // additional USB controller (e.g., PIO-USB).
+    // Process USB device events via TinyUSB
+    tud_task();
 }
 
 void usb_device_send_gamepad(uint16_t buttons, int16_t *axes, uint8_t num_axes) {
-    (void)buttons;
-    (void)axes;
-    (void)num_axes;
-    
-    // HID gamepad output requires USB Device stack which is currently not
-    // enabled due to single USB controller limitation
     if (current_output_type != OUTPUT_TYPE_GAMEPAD) {
         return;
     }
+    
+    // Only send if device is ready
+    if (!tud_hid_ready()) {
+        return;
+    }
+    
+    gamepad_report_t report = {0};
+    report.report_id = REPORT_ID_GAMEPAD;
+    report.buttons = buttons;
+    
+    // Copy axes if provided
+    if (axes && num_axes >= 4) {
+        report.left_x = axes[0];
+        report.left_y = axes[1];
+        report.right_x = axes[2];
+        report.right_y = axes[3];
+    }
+    if (axes && num_axes >= 6) {
+        report.left_trigger = (uint8_t)((axes[4] + 32768) >> 8);  // Convert from int16 to uint8
+        report.right_trigger = (uint8_t)((axes[5] + 32768) >> 8);
+    }
+    
+    // Hat switch is centered by default
+    report.hat = 8;  // 8 = center/no direction
+    
+    tud_hid_report(REPORT_ID_GAMEPAD, &report.buttons, sizeof(report) - 1);  // -1 for report_id
 }
 
 void usb_device_send_keyboard(uint8_t modifiers, uint8_t *keycodes, uint8_t num_keys) {
-    (void)modifiers;
-    (void)keycodes;
-    (void)num_keys;
-    
-    // HID keyboard output requires USB Device stack
     if (current_output_type != OUTPUT_TYPE_KEYBOARD && 
         current_output_type != OUTPUT_TYPE_COMBO) {
         return;
     }
+    
+    if (!tud_hid_ready()) {
+        return;
+    }
+    
+    keyboard_report_t report = {0};
+    report.report_id = REPORT_ID_KEYBOARD;
+    report.modifiers = modifiers;
+    report.reserved = 0;
+    
+    // Copy keycodes (up to 6)
+    if (keycodes && num_keys > 0) {
+        uint8_t copy_count = num_keys > 6 ? 6 : num_keys;
+        memcpy(report.keycodes, keycodes, copy_count);
+    }
+    
+    tud_hid_report(REPORT_ID_KEYBOARD, &report.modifiers, sizeof(report) - 1);
 }
 
 void usb_device_send_mouse(uint8_t buttons, int8_t x, int8_t y, int8_t wheel) {
-    (void)buttons;
-    (void)x;
-    (void)y;
-    (void)wheel;
-    
-    // HID mouse output requires USB Device stack
     if (current_output_type != OUTPUT_TYPE_MOUSE && 
         current_output_type != OUTPUT_TYPE_COMBO) {
         return;
     }
+    
+    if (!tud_hid_ready()) {
+        return;
+    }
+    
+    mouse_report_t report = {0};
+    report.report_id = REPORT_ID_MOUSE;
+    report.buttons = buttons;
+    report.x = x;
+    report.y = y;
+    report.wheel = wheel;
+    
+    tud_hid_report(REPORT_ID_MOUSE, &report.buttons, sizeof(report) - 1);
 }
 
 bool usb_device_config_mode_requested(void) {
@@ -83,11 +158,39 @@ bool usb_device_config_mode_requested(void) {
 
 void usb_device_set_output_type(output_type_t type) {
     if (type != current_output_type) {
-        printf("USB Device: Output type changed to %d\n", type);
+        LOG_INFO("USB Device: Output type changed to %d", type);
         current_output_type = type;
     }
 }
 
 output_type_t usb_device_get_output_type(void) {
     return current_output_type;
+}
+
+//--------------------------------------------------------------------
+// TinyUSB HID Device Callbacks
+//--------------------------------------------------------------------
+
+// Invoked when received GET_REPORT control request
+uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id, 
+                                hid_report_type_t report_type, uint8_t *buffer, uint16_t reqlen) {
+    (void)instance;
+    (void)report_id;
+    (void)report_type;
+    (void)buffer;
+    (void)reqlen;
+    
+    return 0;
+}
+
+// Invoked when received SET_REPORT control request
+void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, 
+                           hid_report_type_t report_type, uint8_t const *buffer, uint16_t bufsize) {
+    (void)instance;
+    (void)report_id;
+    (void)report_type;
+    (void)buffer;
+    (void)bufsize;
+    
+    // Could be used to receive LED status for keyboard, etc.
 }
