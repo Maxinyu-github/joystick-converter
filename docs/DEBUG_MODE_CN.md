@@ -2,11 +2,12 @@
 
 ## 概述
 
-Debug模式（调试模式）允许你从配置软件中实时查看手柄输入数据。这对以下场景特别有用：
+Debug模式（调试模式）允许你从配置软件中实时查看输入设备数据。这对以下场景特别有用：
 - 识别你的手柄支持哪些按键
 - 检测特殊按键（摇杆按键、背键、额外按键等）
 - 排查按键映射问题
 - 了解不同手柄型号的原始数据
+- 使用键盘测试输入功能是否正常
 
 ## 功能特性
 
@@ -16,6 +17,23 @@ Debug模式显示：
 - **扳机**：左右扳机的压力值（0-255）
 - **方向键**：当前方向指示器
 - **原始按键数据**：十六进制按键位图，用于识别未映射的按键
+- **键盘输入**：支持键盘作为输入设备进行调试
+- **设备信息**：显示连接设备的VID/PID和设备类型
+
+## 支持的输入设备
+
+### 手柄 (Gamepad)
+- Nintendo Switch Pro Controller
+- Nintendo Switch Pro Controller 2
+- Xbox 360/One/Series 控制器
+- PlayStation 3/4/5 控制器
+- 通用USB手柄
+
+### 键盘 (Keyboard)
+键盘可以作为调试输入设备使用，用于测试输入功能是否正常工作。当连接键盘时：
+- 显示修饰键状态（Ctrl、Alt、Shift、GUI）
+- 显示当前按下的键码（最多6个）
+- 适合用于验证输入通道是否正常
 
 ## 如何使用Debug模式
 
@@ -117,22 +135,37 @@ Debug模式使用简单的基于文本的串口协议（波特率115200）：
 ```
 DEBUG_START\n    - 启用调试模式
 DEBUG_STOP\n     - 禁用调试模式
-DEBUG_GET\n      - 请求当前手柄状态
+DEBUG_GET\n      - 请求当前输入状态（手柄或键盘）
+DEBUG_INFO\n     - 请求连接设备信息
 ```
 
 **响应**（设备 → PC）：
 ```
 DEBUG_MODE_STARTED\n                              - 确认
 DEBUG_MODE_STOPPED\n                              - 确认
-DEBUG:buttons,lx,ly,rx,ry,lt,rt,dx,dy\n          - 状态数据
+DEBUG:buttons,lx,ly,rx,ry,lt,rt,dx,dy\n          - 手柄状态数据
+DEBUG_KB:modifiers,num_keys,k0,k1,k2,k3,k4,k5\n  - 键盘状态数据
+DEBUG_INFO:vid,pid,addr,type\n                   - 设备信息
+DEBUG_INFO:NO_DEVICE\n                           - 无设备连接
 ```
 
-**状态数据格式**：
+**手柄状态数据格式**：
 - `buttons`：16位按键位图（无符号整数）
 - `lx`、`ly`：左摇杆X/Y（-32768到32767）
 - `rx`、`ry`：右摇杆X/Y（-32768到32767）
 - `lt`、`rt`：左右扳机（0-255）
 - `dx`、`dy`：方向键X/Y（-1、0、1）
+
+**键盘状态数据格式**：
+- `modifiers`：修饰键位图（Ctrl=0x01, Shift=0x02, Alt=0x04, GUI=0x08）
+- `num_keys`：当前按下的键数量
+- `k0-k5`：键码（USB HID键码）
+
+**设备信息格式**：
+- `vid`：厂商ID（十六进制）
+- `pid`：产品ID（十六进制）
+- `addr`：USB设备地址
+- `type`：输入类型（0=未知，1=手柄，2=键盘）
 
 ### 轮询速率
 

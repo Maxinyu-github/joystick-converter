@@ -72,6 +72,7 @@
 
 ## 日志内容示例
 
+### 基本初始化日志
 ```
 [1234][INFO] Joystick Converter starting...
 [1235][INFO] Configuration loaded successfully
@@ -80,9 +81,44 @@
 [1250][INFO] Remapping engine initialized
 [1255][INFO] Macro system initialized
 [1260][INFO] Initialization complete. Waiting for gamepad...
-[5000][INFO] Gamepad connected
-[10000][INFO] Gamepad disconnected
 ```
+
+### USB设备连接日志
+当USB设备连接时，日志会记录详细的设备信息：
+```
+[5000][INFO] USB Host: Device mounted - addr=1, instance=0
+[5001][DEBUG] USB Host: VID=0x057E, PID=0x2009
+[5002][DEBUG] USB Host: Device name: Nintendo Switch Pro Controller
+[5003][INFO] USB Host: Input type detected: Gamepad
+[5004][INFO] Gamepad connected
+```
+
+### 设备断开日志
+```
+[10000][INFO] USB Host: Device unmounted - addr=1, instance=0
+[10001][DEBUG] USB Host: Disconnected device: Nintendo Switch Pro Controller (VID=0x057E, PID=0x2009)
+[10002][INFO] Gamepad disconnected
+```
+
+### 键盘输入日志（调试模式）
+```
+[15000][INFO] USB Host: Device mounted - addr=1, instance=0
+[15001][INFO] USB Host: Input type detected: Keyboard
+[15100][DEBUG] Keyboard: mod=0x02, keys=1
+```
+
+## 已知设备列表
+
+固件内置了常见控制器的VID/PID数据库，用于在日志中显示设备名称：
+
+| VID | PID | 设备名称 |
+|-----|-----|----------|
+| 0x057E | 0x2009 | Nintendo Switch Pro Controller |
+| 0x057E | 0x200E | Nintendo Switch Pro Controller 2 |
+| 0x045E | 0x028E | Xbox 360 Controller |
+| 0x045E | 0x0B12 | Xbox Series X Controller |
+| 0x054C | 0x05C4 | PlayStation 4 Controller |
+| 0x054C | 0x0CE6 | PlayStation 5 DualSense |
 
 ## 通信协议
 

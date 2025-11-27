@@ -99,18 +99,46 @@ static void handle_serial_commands(void) {
                 }
                 printf("DEBUG_MODE_STOPPED\n");
             } else if (strcmp(cmd_buffer, "DEBUG_GET") == 0) {
-                // Send current gamepad state
+                // Send current input state based on input type
                 if (debug_mode_enabled && usb_host_device_connected()) {
-                    gamepad_state_t state;
-                    if (usb_host_get_gamepad_state(&state)) {
-                        // Format: "DEBUG:buttons,lx,ly,rx,ry,lt,rt,dx,dy"
-                        printf("DEBUG:%u,%d,%d,%d,%d,%u,%u,%d,%d\n",
-                               state.buttons,
-                               state.left_x, state.left_y,
-                               state.right_x, state.right_y,
-                               state.left_trigger, state.right_trigger,
-                               state.dpad_x, state.dpad_y);
+                    input_type_t input_type = usb_host_get_input_type();
+                    
+                    if (input_type == INPUT_TYPE_KEYBOARD) {
+                        keyboard_state_t state;
+                        if (usb_host_get_keyboard_state(&state)) {
+                            // Format: "DEBUG_KB:modifiers,num_keys,key0,key1,key2,key3,key4,key5"
+                            printf("DEBUG_KB:%u,%u,%u,%u,%u,%u,%u,%u\n",
+                                   state.modifiers,
+                                   state.num_keys,
+                                   state.keys[0], state.keys[1],
+                                   state.keys[2], state.keys[3],
+                                   state.keys[4], state.keys[5]);
+                        }
+                    } else {
+                        gamepad_state_t state;
+                        if (usb_host_get_gamepad_state(&state)) {
+                            // Format: "DEBUG:buttons,lx,ly,rx,ry,lt,rt,dx,dy"
+                            printf("DEBUG:%u,%d,%d,%d,%d,%u,%u,%d,%d\n",
+                                   state.buttons,
+                                   state.left_x, state.left_y,
+                                   state.right_x, state.right_y,
+                                   state.left_trigger, state.right_trigger,
+                                   state.dpad_x, state.dpad_y);
+                        }
                     }
+                }
+            } else if (strcmp(cmd_buffer, "DEBUG_INFO") == 0) {
+                // Send connected device info
+                if (usb_host_device_connected()) {
+                    usb_device_info_t info;
+                    if (usb_host_get_device_info(&info)) {
+                        // Format: "DEBUG_INFO:vid,pid,addr,type"
+                        printf("DEBUG_INFO:0x%04X,0x%04X,%u,%u\n",
+                               info.vid, info.pid, 
+                               info.dev_addr, (unsigned)info.input_type);
+                    }
+                } else {
+                    printf("DEBUG_INFO:NO_DEVICE\n");
                 }
             } else if (strcmp(cmd_buffer, "LOG_GET") == 0) {
                 // Get and send all logs
