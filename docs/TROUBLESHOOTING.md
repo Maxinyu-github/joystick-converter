@@ -19,6 +19,12 @@ This guide helps resolve common issues with the Joystick Converter.
 4. Check if LED is blinking (indicates firmware is running)
 5. Verify power supply is adequate (5V, at least 500mA)
 
+**Windows-specific Notes**:
+- After flashing, a new COM port should appear automatically
+- Check Device Manager > Ports (COM & LPT) for the serial port
+- The device appears as a USB Serial Device (CDC) 
+- If no port appears after firmware flash, ensure you're using the latest firmware build
+
 ### Serial Port Access Denied (Linux)
 
 **Symptoms**: 

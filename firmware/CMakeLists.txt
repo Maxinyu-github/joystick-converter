@@ -18,9 +18,10 @@ target_link_libraries(joystick_converter
     # tinyusb_device    # Enable when TinyUSB device is integrated
 )
 
-# Enable USB output, disable UART output
-pico_enable_stdio_usb(joystick_converter 0)
-pico_enable_stdio_uart(joystick_converter 1)
+# Enable USB output for serial communication (required for PC config tool)
+# Note: USB stdio creates a CDC serial port that Windows/Linux/Mac can recognize
+pico_enable_stdio_usb(joystick_converter 1)
+pico_enable_stdio_uart(joystick_converter 0)
 
 # Create map/bin/hex/uf2 files
 pico_add_extra_outputs(joystick_converter)

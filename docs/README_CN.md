@@ -80,6 +80,7 @@ make
 3. 开发板将显示为USB存储设备
 4. 将 `joystick_converter.uf2` 复制到该存储设备
 5. 设备将自动重启并运行固件
+6. 固件启动后，电脑会自动识别到一个新的USB串口设备（Windows显示为COM端口，Linux显示为/dev/ttyACM0）
 
 ### 3. 使用配置软件
 
@@ -225,6 +226,13 @@ mouse_button_release
 详细说明请参考 [Debug模式文档](DEBUG_MODE.md)（英文）。
 
 ## 故障排除
+
+### 问题：设备无法识别（Windows没有检测到串口）
+- 检查USB连接线是否为数据线（不是纯充电线）
+- 确认固件已正确烧录（LED应该闪烁）
+- 打开Windows设备管理器，查看"端口(COM和LPT)"下是否有新设备
+- 固件启动后应该自动创建USB CDC串口设备
+- 尝试不同的USB端口
 
 ### 问题：设备无法识别
 - 检查USB连接
