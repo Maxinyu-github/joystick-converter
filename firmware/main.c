@@ -130,11 +130,15 @@ static void handle_serial_commands(void) {
                 // Get log entry count
                 printf("LOG_COUNT:%u\n", logging_get_count());
             } else if (strncmp(cmd_buffer, "LOG_LEVEL ", 10) == 0) {
-                // Set log level (LOG_LEVEL 0-3)
-                int level = cmd_buffer[10] - '0';
-                if (level >= 0 && level <= 3) {
-                    logging_set_level((log_level_t)level);
-                    printf("LOG_LEVEL_SET:%d\n", level);
+                // Set log level (LOG_LEVEL 0-3), ensure there's a character after space
+                if (cmd_buffer[10] != '\0') {
+                    int level = cmd_buffer[10] - '0';
+                    if (level >= 0 && level <= 3) {
+                        logging_set_level((log_level_t)level);
+                        printf("LOG_LEVEL_SET:%d\n", level);
+                    } else {
+                        printf("LOG_LEVEL_ERROR:invalid\n");
+                    }
                 } else {
                     printf("LOG_LEVEL_ERROR:invalid\n");
                 }

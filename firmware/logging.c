@@ -41,7 +41,7 @@ void logging_log(log_level_t level, const char *format, ...) {
         return;
     }
     
-    // Validate level
+    // Validate level - ensure it's within bounds for level_names array
     if (level > LOG_LEVEL_ERROR) {
         level = LOG_LEVEL_ERROR;
     }
@@ -50,7 +50,7 @@ void logging_log(log_level_t level, const char *format, ...) {
     char entry[LOG_ENTRY_MAX_LEN];
     uint32_t timestamp = to_ms_since_boot(get_absolute_time());
     
-    // Create header with timestamp and level
+    // Create header with timestamp and level (level is guaranteed valid here)
     int header_len = snprintf(entry, sizeof(entry), "[%lu][%s] ", 
                               (unsigned long)timestamp, level_names[level]);
     
@@ -89,6 +89,10 @@ void logging_log(log_level_t level, const char *format, ...) {
             // Buffer full, advance tail to make room
             log_tail = (log_tail + 1) % LOG_BUFFER_SIZE;
             log_overflow = true;
+            // Decrement count since we're losing an entry
+            if (log_count > 0) {
+                log_count--;
+            }
         }
     }
     

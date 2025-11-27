@@ -875,7 +875,12 @@ class ConfigTool(QMainWindow):
                 if response.startswith("LOG_STATUS:"):
                     # Parse: LOG_STATUS:level=X,count=Y,overflow=Z
                     status_str = response[11:]
-                    parts = dict(item.split('=') for item in status_str.split(','))
+                    parts = {}
+                    for item in status_str.split(','):
+                        if '=' in item:
+                            key_val = item.split('=', 1)  # Split only on first '='
+                            if len(key_val) == 2:
+                                parts[key_val[0]] = key_val[1]
                     
                     count = int(parts.get('count', '0'))
                     overflow = parts.get('overflow', '0') == '1'
