@@ -776,7 +776,7 @@ class ConfigTool(QMainWindow):
                         self.log_text.setPlainText("(No logs available)")
                         self.statusBar().showMessage("No logs on device")
                         return
-                    elif in_log_block and line:
+                    elif in_log_block:
                         logs.append(line)
                     
                     last_data_time = time.time()
@@ -815,15 +815,16 @@ class ConfigTool(QMainWindow):
                     return
                 time.sleep(0.01)
             
-            # Read response
-            response = self.serial_port.readline().decode('utf-8', errors='ignore').strip()
-            if response == "LOG_CLEARED":
-                self.log_text.clear()
-                self.log_count_label.setText("Entries: 0")
-                self.log_overflow_label.setText("Overflow: No")
-                self.statusBar().showMessage("Logs cleared")
-            else:
-                self.statusBar().showMessage(f"Unexpected response: {response}")
+            # Read response (data is available from the loop above)
+            if self.serial_port.in_waiting > 0:
+                response = self.serial_port.readline().decode('utf-8', errors='ignore').strip()
+                if response == "LOG_CLEARED":
+                    self.log_text.clear()
+                    self.log_count_label.setText("Entries: 0")
+                    self.log_overflow_label.setText("Overflow: No")
+                    self.statusBar().showMessage("Logs cleared")
+                else:
+                    self.statusBar().showMessage(f"Unexpected response: {response}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to clear logs: {e}")
     
@@ -870,15 +871,18 @@ class ConfigTool(QMainWindow):
             while self.serial_port.in_waiting == 0:
                 QApplication.processEvents()
                 if time.time() - start_time > 1.0:
+                    self.statusBar().showMessage("No response from device")
                     return
                 time.sleep(0.01)
             
-            response = self.serial_port.readline().decode('utf-8', errors='ignore').strip()
-            if response.startswith("LOG_LEVEL_SET:"):
-                level_names = ["DEBUG", "INFO", "WARN", "ERROR"]
-                self.statusBar().showMessage(f"Log level set to {level_names[index]}")
-            else:
-                self.statusBar().showMessage(f"Failed to set log level: {response}")
+            # Read response (data is available from the loop above)
+            if self.serial_port.in_waiting > 0:
+                response = self.serial_port.readline().decode('utf-8', errors='ignore').strip()
+                if response.startswith("LOG_LEVEL_SET:"):
+                    level_names = ["DEBUG", "INFO", "WARN", "ERROR"]
+                    self.statusBar().showMessage(f"Log level set to {level_names[index]}")
+                else:
+                    self.statusBar().showMessage(f"Failed to set log level: {response}")
         except Exception as e:
             QMessageBox.warning(self, "Warning", f"Failed to set log level: {e}")
     
@@ -901,28 +905,30 @@ class ConfigTool(QMainWindow):
                     return
                 time.sleep(0.01)
             
-            response = self.serial_port.readline().decode('utf-8', errors='ignore').strip()
-            if response.startswith("LOG_STATUS:"):
-                # Parse: LOG_STATUS:level=X,count=Y,overflow=Z
-                status_str = response[11:]
-                parts = {}
-                for item in status_str.split(','):
-                    if '=' in item:
-                        key_val = item.split('=', 1)  # Split only on first '='
-                        if len(key_val) == 2:
-                            parts[key_val[0]] = key_val[1]
-                
-                count = int(parts.get('count', '0'))
-                overflow = parts.get('overflow', '0') == '1'
-                level = int(parts.get('level', '1'))
-                
-                self.log_count_label.setText(f"Entries: {count}")
-                self.log_overflow_label.setText(f"Overflow: {'Yes' if overflow else 'No'}")
-                self.log_level_combo.setCurrentIndex(level)
-                
-                self.statusBar().showMessage("Log status updated")
-            else:
-                self.statusBar().showMessage(f"Unexpected response: {response}")
+            # Read response (data is available from the loop above)
+            if self.serial_port.in_waiting > 0:
+                response = self.serial_port.readline().decode('utf-8', errors='ignore').strip()
+                if response.startswith("LOG_STATUS:"):
+                    # Parse: LOG_STATUS:level=X,count=Y,overflow=Z
+                    status_str = response[11:]
+                    parts = {}
+                    for item in status_str.split(','):
+                        if '=' in item:
+                            key_val = item.split('=', 1)  # Split only on first '='
+                            if len(key_val) == 2:
+                                parts[key_val[0]] = key_val[1]
+                    
+                    count = int(parts.get('count', '0'))
+                    overflow = parts.get('overflow', '0') == '1'
+                    level = int(parts.get('level', '1'))
+                    
+                    self.log_count_label.setText(f"Entries: {count}")
+                    self.log_overflow_label.setText(f"Overflow: {'Yes' if overflow else 'No'}")
+                    self.log_level_combo.setCurrentIndex(level)
+                    
+                    self.statusBar().showMessage("Log status updated")
+                else:
+                    self.statusBar().showMessage(f"Unexpected response: {response}")
         except Exception as e:
             QMessageBox.warning(self, "Warning", f"Failed to get log status: {e}")
     
