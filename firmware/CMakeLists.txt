@@ -5,6 +5,7 @@ add_executable(joystick_converter
     config.c
     macro.c
     remapping.c
+    logging.c
 )
 
 # Pull in common dependencies

@@ -20,6 +20,7 @@
 #include "config.h"
 #include "remapping.h"
 #include "macro.h"
+#include "logging.h"
 
 // LED pin for status indication
 #define LED_PIN 25
@@ -56,8 +57,11 @@ static void hardware_init(void) {
 // Command buffer size for serial commands
 #define CMD_BUFFER_SIZE 32
 
+// Buffer for log output (shared across log commands)
+static char log_output_buffer[LOG_BUFFER_SIZE];
+
 /**
- * Handle serial commands for debug mode
+ * Handle serial commands for debug mode and logging
  */
 static void handle_serial_commands(void) {
     static char cmd_buffer[CMD_BUFFER_SIZE];
@@ -108,6 +112,42 @@ static void handle_serial_commands(void) {
                                state.dpad_x, state.dpad_y);
                     }
                 }
+            } else if (strcmp(cmd_buffer, "LOG_GET") == 0) {
+                // Get and send all logs
+                uint16_t len = logging_get_logs(log_output_buffer, sizeof(log_output_buffer));
+                if (len > 0) {
+                    printf("LOG_START\n");
+                    printf("%s", log_output_buffer);
+                    printf("LOG_END\n");
+                } else {
+                    printf("LOG_EMPTY\n");
+                }
+            } else if (strcmp(cmd_buffer, "LOG_CLEAR") == 0) {
+                // Clear all logs
+                logging_clear();
+                printf("LOG_CLEARED\n");
+            } else if (strcmp(cmd_buffer, "LOG_COUNT") == 0) {
+                // Get log entry count
+                printf("LOG_COUNT:%u\n", logging_get_count());
+            } else if (strncmp(cmd_buffer, "LOG_LEVEL ", 10) == 0) {
+                // Set log level (LOG_LEVEL 0-3), ensure there's a character after space
+                if (cmd_buffer[10] != '\0') {
+                    int level = cmd_buffer[10] - '0';
+                    if (level >= 0 && level <= 3) {
+                        logging_set_level((log_level_t)level);
+                        printf("LOG_LEVEL_SET:%d\n", level);
+                    } else {
+                        printf("LOG_LEVEL_ERROR:invalid\n");
+                    }
+                } else {
+                    printf("LOG_LEVEL_ERROR:invalid\n");
+                }
+            } else if (strcmp(cmd_buffer, "LOG_STATUS") == 0) {
+                // Get logging status
+                printf("LOG_STATUS:level=%d,count=%u,overflow=%d\n",
+                       logging_get_level(),
+                       logging_get_count(),
+                       logging_has_overflow() ? 1 : 0);
             }
             
             cmd_pos = 0;
@@ -170,33 +210,44 @@ int main(void) {
     // Initialize hardware
     hardware_init();
     
+    // Initialize logging system
+    logging_init();
+    LOG_INFO("Joystick Converter starting...");
+    
     // Load configuration from flash
     if (!config_load()) {
-        printf("Warning: Failed to load config, using defaults\n");
+        LOG_WARN("Failed to load config, using defaults");
         config_set_defaults();
+    } else {
+        LOG_INFO("Configuration loaded successfully");
     }
     
     // Initialize USB host for gamepad input
     if (!usb_host_init()) {
-        printf("Error: Failed to initialize USB host\n");
+        LOG_ERROR("Failed to initialize USB host");
         current_state = STATE_ERROR;
     } else {
+        LOG_INFO("USB host initialized");
         current_state = STATE_WAITING_FOR_INPUT;
     }
     
     // Initialize USB device for output
     if (!usb_device_init()) {
-        printf("Error: Failed to initialize USB device\n");
+        LOG_ERROR("Failed to initialize USB device");
         current_state = STATE_ERROR;
+    } else {
+        LOG_INFO("USB device initialized");
     }
     
     // Initialize remapping engine
     remapping_init();
+    LOG_INFO("Remapping engine initialized");
     
     // Initialize macro system
     macro_init();
+    LOG_INFO("Macro system initialized");
     
-    printf("Initialization complete. Waiting for gamepad...\n");
+    LOG_INFO("Initialization complete. Waiting for gamepad...");
     
     // Main loop
     while (1) {
@@ -225,19 +276,19 @@ int main(void) {
                 } else {
                     current_state = STATE_ACTIVE;
                 }
-                printf("Gamepad connected!\n");
+                LOG_INFO("Gamepad connected");
             }
         } else if (current_state == STATE_ACTIVE || current_state == STATE_DEBUG_MODE) {
             if (!usb_host_device_connected()) {
                 current_state = STATE_WAITING_FOR_INPUT;
-                printf("Gamepad disconnected\n");
+                LOG_INFO("Gamepad disconnected");
             }
         }
         
         // Check for config mode entry (could be via special button combo)
         if (usb_device_config_mode_requested()) {
             current_state = STATE_CONFIG_MODE;
-            printf("Entering configuration mode\n");
+            LOG_INFO("Entering configuration mode");
         }
         
         // Small delay to prevent busy waiting and reduce power consumption
