@@ -9,14 +9,16 @@ import sys
 import time
 import serial
 import serial.tools.list_ports
+from datetime import datetime
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QComboBox, QLabel, QTableWidget, QTableWidgetItem,
     QMessageBox, QGroupBox, QDialog, QDialogButtonBox, QFormLayout,
-    QSpinBox, QTextEdit, QTabWidget, QProgressBar, QCheckBox, QGridLayout
+    QSpinBox, QTextEdit, QTabWidget, QProgressBar, QCheckBox, QGridLayout,
+    QFileDialog, QPlainTextEdit
 )
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QTextCursor
 
 
 class MacroEditorDialog(QDialog):
@@ -253,6 +255,77 @@ class ConfigTool(QMainWindow):
         self.init_debug_display(debug_layout)
         
         self.tab_widget.addTab(debug_tab, "Debug Mode")
+        
+        # Device Logs Tab
+        logs_tab = QWidget()
+        logs_layout = QVBoxLayout(logs_tab)
+        
+        # Log control section
+        log_control_group = QGroupBox("Log Control")
+        log_control_layout = QHBoxLayout()
+        
+        self.log_refresh_btn = QPushButton("Refresh Logs")
+        self.log_refresh_btn.clicked.connect(self.refresh_logs)
+        log_control_layout.addWidget(self.log_refresh_btn)
+        
+        self.log_clear_btn = QPushButton("Clear Logs")
+        self.log_clear_btn.clicked.connect(self.clear_logs)
+        log_control_layout.addWidget(self.log_clear_btn)
+        
+        self.log_export_btn = QPushButton("Export Logs")
+        self.log_export_btn.clicked.connect(self.export_logs)
+        log_control_layout.addWidget(self.log_export_btn)
+        
+        log_control_layout.addStretch()
+        
+        # Log level selector
+        log_control_layout.addWidget(QLabel("Log Level:"))
+        self.log_level_combo = QComboBox()
+        self.log_level_combo.addItems(["DEBUG", "INFO", "WARN", "ERROR"])
+        self.log_level_combo.setCurrentIndex(1)  # Default to INFO
+        self.log_level_combo.currentIndexChanged.connect(self.set_log_level)
+        log_control_layout.addWidget(self.log_level_combo)
+        
+        log_control_group.setLayout(log_control_layout)
+        logs_layout.addWidget(log_control_group)
+        
+        # Log status section
+        log_status_group = QGroupBox("Log Status")
+        log_status_layout = QHBoxLayout()
+        
+        self.log_count_label = QLabel("Entries: 0")
+        log_status_layout.addWidget(self.log_count_label)
+        
+        self.log_overflow_label = QLabel("Overflow: No")
+        log_status_layout.addWidget(self.log_overflow_label)
+        
+        self.log_status_btn = QPushButton("Get Status")
+        self.log_status_btn.clicked.connect(self.get_log_status)
+        log_status_layout.addWidget(self.log_status_btn)
+        
+        log_status_layout.addStretch()
+        log_status_group.setLayout(log_status_layout)
+        logs_layout.addWidget(log_status_group)
+        
+        # Log display area
+        log_display_group = QGroupBox("Device Logs")
+        log_display_layout = QVBoxLayout()
+        
+        self.log_text = QPlainTextEdit()
+        self.log_text.setReadOnly(True)
+        self.log_text.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+        font = QFont("Courier New", 9)
+        self.log_text.setFont(font)
+        self.log_text.setPlaceholderText(
+            "Device logs will appear here.\n"
+            "Click 'Refresh Logs' to fetch logs from the device."
+        )
+        log_display_layout.addWidget(self.log_text)
+        
+        log_display_group.setLayout(log_display_layout)
+        logs_layout.addWidget(log_display_group)
+        
+        self.tab_widget.addTab(logs_tab, "Device Logs")
     
     def init_debug_display(self, parent_layout):
         """Initialize the debug display widgets"""
@@ -656,6 +729,167 @@ class ConfigTool(QMainWindow):
         
         # TODO: Implement config saving protocol
         QMessageBox.information(self, "Save Config", "Config saving not yet implemented")
+    
+    def refresh_logs(self):
+        """Fetch logs from device"""
+        if not self.serial_port or not self.serial_port.is_open:
+            QMessageBox.warning(self, "Error", "Not connected to device")
+            return
+        
+        try:
+            # Clear any pending data
+            self.serial_port.reset_input_buffer()
+            
+            # Request logs
+            self.serial_port.write(b"LOG_GET\n")
+            
+            # Wait for response
+            time.sleep(0.1)
+            
+            # Read response
+            logs = []
+            in_log_block = False
+            timeout_count = 0
+            max_timeout = 50  # 5 seconds max
+            
+            while timeout_count < max_timeout:
+                if self.serial_port.in_waiting > 0:
+                    line = self.serial_port.readline().decode('utf-8', errors='ignore').strip()
+                    
+                    if line == "LOG_START":
+                        in_log_block = True
+                        continue
+                    elif line == "LOG_END":
+                        break
+                    elif line == "LOG_EMPTY":
+                        self.log_text.setPlainText("(No logs available)")
+                        self.statusBar().showMessage("No logs on device")
+                        return
+                    elif in_log_block:
+                        logs.append(line)
+                    
+                    timeout_count = 0  # Reset timeout on data received
+                else:
+                    time.sleep(0.1)
+                    timeout_count += 1
+            
+            if logs:
+                self.log_text.setPlainText("\n".join(logs))
+                # Scroll to bottom
+                cursor = self.log_text.textCursor()
+                cursor.movePosition(QTextCursor.MoveOperation.End)
+                self.log_text.setTextCursor(cursor)
+                self.statusBar().showMessage(f"Retrieved {len(logs)} log lines")
+            else:
+                self.log_text.setPlainText("(No logs retrieved)")
+                self.statusBar().showMessage("No logs retrieved")
+                
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to fetch logs: {e}")
+    
+    def clear_logs(self):
+        """Clear logs on device"""
+        if not self.serial_port or not self.serial_port.is_open:
+            QMessageBox.warning(self, "Error", "Not connected to device")
+            return
+        
+        try:
+            self.serial_port.write(b"LOG_CLEAR\n")
+            time.sleep(0.1)
+            
+            # Read response
+            if self.serial_port.in_waiting > 0:
+                response = self.serial_port.readline().decode('utf-8', errors='ignore').strip()
+                if response == "LOG_CLEARED":
+                    self.log_text.clear()
+                    self.log_count_label.setText("Entries: 0")
+                    self.log_overflow_label.setText("Overflow: No")
+                    self.statusBar().showMessage("Logs cleared")
+                else:
+                    self.statusBar().showMessage(f"Unexpected response: {response}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to clear logs: {e}")
+    
+    def export_logs(self):
+        """Export logs to file"""
+        log_content = self.log_text.toPlainText()
+        if not log_content or log_content.startswith("("):
+            QMessageBox.warning(self, "Warning", "No logs to export")
+            return
+        
+        # Generate default filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_filename = f"joystick_converter_logs_{timestamp}.txt"
+        
+        filename, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Logs",
+            default_filename,
+            "Text Files (*.txt);;All Files (*)"
+        )
+        
+        if filename:
+            try:
+                with open(filename, 'w', encoding='utf-8') as f:
+                    f.write(f"Joystick Converter Device Logs\n")
+                    f.write(f"Exported: {datetime.now().isoformat()}\n")
+                    f.write("=" * 50 + "\n\n")
+                    f.write(log_content)
+                self.statusBar().showMessage(f"Logs exported to {filename}")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to export logs: {e}")
+    
+    def set_log_level(self, index):
+        """Set device log level"""
+        if not self.serial_port or not self.serial_port.is_open:
+            return
+        
+        try:
+            command = f"LOG_LEVEL {index}\n"
+            self.serial_port.write(command.encode())
+            time.sleep(0.1)
+            
+            if self.serial_port.in_waiting > 0:
+                response = self.serial_port.readline().decode('utf-8', errors='ignore').strip()
+                if response.startswith("LOG_LEVEL_SET:"):
+                    level_names = ["DEBUG", "INFO", "WARN", "ERROR"]
+                    self.statusBar().showMessage(f"Log level set to {level_names[index]}")
+                else:
+                    self.statusBar().showMessage(f"Failed to set log level: {response}")
+        except Exception as e:
+            QMessageBox.warning(self, "Warning", f"Failed to set log level: {e}")
+    
+    def get_log_status(self):
+        """Get log status from device"""
+        if not self.serial_port or not self.serial_port.is_open:
+            QMessageBox.warning(self, "Error", "Not connected to device")
+            return
+        
+        try:
+            self.serial_port.reset_input_buffer()
+            self.serial_port.write(b"LOG_STATUS\n")
+            time.sleep(0.1)
+            
+            if self.serial_port.in_waiting > 0:
+                response = self.serial_port.readline().decode('utf-8', errors='ignore').strip()
+                if response.startswith("LOG_STATUS:"):
+                    # Parse: LOG_STATUS:level=X,count=Y,overflow=Z
+                    status_str = response[11:]
+                    parts = dict(item.split('=') for item in status_str.split(','))
+                    
+                    count = int(parts.get('count', '0'))
+                    overflow = parts.get('overflow', '0') == '1'
+                    level = int(parts.get('level', '1'))
+                    
+                    self.log_count_label.setText(f"Entries: {count}")
+                    self.log_overflow_label.setText(f"Overflow: {'Yes' if overflow else 'No'}")
+                    self.log_level_combo.setCurrentIndex(level)
+                    
+                    self.statusBar().showMessage("Log status updated")
+                else:
+                    self.statusBar().showMessage(f"Unexpected response: {response}")
+        except Exception as e:
+            QMessageBox.warning(self, "Warning", f"Failed to get log status: {e}")
     
     def closeEvent(self, event):
         """Handle window close"""

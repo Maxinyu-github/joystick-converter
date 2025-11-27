@@ -367,6 +367,20 @@ The configuration software communicates with the device via serial port using a 
 - `SAVE_CONFIG` - Save config to flash
 - `RESET_CONFIG` - Reset to defaults
 
+### Debug Mode Commands
+
+- `DEBUG_START` - Enable debug mode
+- `DEBUG_STOP` - Disable debug mode
+- `DEBUG_GET` - Request current gamepad state
+
+### Logging Commands
+
+- `LOG_GET` - Retrieve all stored logs
+- `LOG_CLEAR` - Clear all logs
+- `LOG_COUNT` - Get number of log entries
+- `LOG_LEVEL <0-3>` - Set minimum log level (0=DEBUG, 1=INFO, 2=WARN, 3=ERROR)
+- `LOG_STATUS` - Get logging status (level, count, overflow)
+
 ### Response Format
 
 All responses are JSON formatted:
@@ -383,4 +397,122 @@ Error response:
     "status": "error",
     "message": "Error description"
 }
+```
+
+### Logging Response Format
+
+Log responses use a simple text-based format:
+
+**LOG_GET Response:**
+```
+LOG_START
+[timestamp][LEVEL] message
+[timestamp][LEVEL] message
+...
+LOG_END
+```
+
+Or if no logs:
+```
+LOG_EMPTY
+```
+
+**LOG_CLEAR Response:**
+```
+LOG_CLEARED
+```
+
+**LOG_COUNT Response:**
+```
+LOG_COUNT:<number>
+```
+
+**LOG_LEVEL Response:**
+```
+LOG_LEVEL_SET:<level>
+```
+Or on error:
+```
+LOG_LEVEL_ERROR:invalid
+```
+
+**LOG_STATUS Response:**
+```
+LOG_STATUS:level=<0-3>,count=<number>,overflow=<0|1>
+```
+
+## Logging API
+
+### Functions
+
+#### `void logging_init(void)`
+Initialize the logging system.
+
+#### `void logging_log(log_level_t level, const char *format, ...)`
+Log a message at the specified level.
+
+**Parameters**:
+- `level`: Log level (LOG_LEVEL_DEBUG, LOG_LEVEL_INFO, LOG_LEVEL_WARN, LOG_LEVEL_ERROR)
+- `format`: Printf-style format string
+- `...`: Format arguments
+
+#### `void logging_set_level(log_level_t level)`
+Set the minimum log level to capture.
+
+**Parameters**:
+- `level`: Minimum log level
+
+#### `log_level_t logging_get_level(void)`
+Get the current log level.
+
+**Returns**: Current minimum log level
+
+#### `uint16_t logging_get_logs(char *buffer, uint16_t buffer_size)`
+Get all logs as a formatted string.
+
+**Parameters**:
+- `buffer`: Output buffer
+- `buffer_size`: Size of output buffer
+
+**Returns**: Number of bytes written
+
+#### `uint16_t logging_get_count(void)`
+Get number of log entries.
+
+**Returns**: Number of log entries
+
+#### `void logging_clear(void)`
+Clear all logs.
+
+#### `bool logging_has_overflow(void)`
+Check if log buffer has overflowed.
+
+**Returns**: `true` if overflow occurred
+
+### Convenience Macros
+
+```c
+LOG_DEBUG(fmt, ...)  // Log at DEBUG level
+LOG_INFO(fmt, ...)   // Log at INFO level
+LOG_WARN(fmt, ...)   // Log at WARN level
+LOG_ERROR(fmt, ...)  // Log at ERROR level
+```
+
+### Data Types
+
+#### `log_level_t`
+```c
+typedef enum {
+    LOG_LEVEL_DEBUG = 0,
+    LOG_LEVEL_INFO = 1,
+    LOG_LEVEL_WARN = 2,
+    LOG_LEVEL_ERROR = 3
+} log_level_t;
+```
+
+### Constants
+
+```c
+#define LOG_BUFFER_SIZE 4096     // Maximum log buffer size
+#define LOG_ENTRY_MAX_LEN 128    // Maximum single log entry length
 ```
