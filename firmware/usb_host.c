@@ -1,13 +1,17 @@
 /**
  * USB Host Module Implementation
  * 
- * Uses TinyUSB host stack for USB HID device support.
+ * Uses TinyUSB host stack with PIO-USB for USB HID device support.
+ * 
+ * The USB Host runs on PIO-USB (port 1) which connects to the controller
+ * via the PIO-USB Type-C port on the Waveshare RP2350-PiZero.
  */
 
 #include "usb_host.h"
 #include <stdio.h>
 #include <string.h>
 #include "pico/stdlib.h"
+#include "pio_usb.h"
 #include "tusb.h"
 #include "remapping.h"
 #include "logging.h"
@@ -77,11 +81,16 @@ static const char* get_input_type_name(input_type_t type) {
 }
 
 bool usb_host_init(void) {
-    LOG_INFO("USB Host: Initializing TinyUSB host stack...");
+    LOG_INFO("USB Host: Initializing PIO-USB host stack...");
     
-    // Initialize TinyUSB host stack
+    // Configure PIO-USB with default settings
+    // D+ pin is GPIO0, D- is GPIO1 (D+ + 1)
+    pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
+    tuh_configure(BOARD_TUH_RHPORT, TUH_CFGID_RPI_PIO_USB_CONFIGURATION, &pio_cfg);
+    
+    // Initialize TinyUSB host stack on PIO-USB port (port 1)
     if (!tuh_init(BOARD_TUH_RHPORT)) {
-        LOG_ERROR("USB Host: Failed to initialize TinyUSB host");
+        LOG_ERROR("USB Host: Failed to initialize TinyUSB host on PIO-USB");
         return false;
     }
     
@@ -93,7 +102,7 @@ bool usb_host_init(void) {
     keyboard_state_valid = false;
     current_input_type = INPUT_TYPE_UNKNOWN;
     
-    LOG_INFO("USB Host: TinyUSB host stack initialized");
+    LOG_INFO("USB Host: PIO-USB host stack initialized on port %d", BOARD_TUH_RHPORT);
     return true;
 }
 
