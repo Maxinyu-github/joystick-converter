@@ -27,10 +27,14 @@ typedef struct {
     const char *name;
 } known_device_t;
 
+// Boot protocol keyboard report constants
+#define KEYBOARD_REPORT_SIZE 8
+#define KEYBOARD_REPORT_KEY_START 2
+
 static const known_device_t known_devices[] = {
     // Nintendo controllers
     {0x057E, 0x2009, "Nintendo Switch Pro Controller"},
-    {0x057E, 0x200E, "Nintendo Switch Pro Controller 2"},
+    {0x057E, 0x200E, "Nintendo Switch Pro Controller 2"},  // Second generation Switch Pro Controller
     {0x057E, 0x2017, "Nintendo Switch SNES Controller"},
     {0x057E, 0x2019, "Nintendo Switch N64 Controller"},
     {0x057E, 0x201E, "Nintendo Switch Online Controller"},
@@ -157,8 +161,14 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
     // tuh_vid_pid_get(dev_addr, &device_info.vid, &device_info.pid);
     
     // Log detailed device info
+    // NOTE: VID/PID will be populated when TinyUSB is integrated
+    // For now they will be 0 until tuh_vid_pid_get() is called
     LOG_DEBUG("USB Host: VID=0x%04X, PID=0x%04X", device_info.vid, device_info.pid);
-    LOG_DEBUG("USB Host: Device name: %s", get_device_name(device_info.vid, device_info.pid));
+    if (device_info.vid == 0 && device_info.pid == 0) {
+        LOG_DEBUG("USB Host: Device info pending TinyUSB integration");
+    } else {
+        LOG_DEBUG("USB Host: Device name: %s", get_device_name(device_info.vid, device_info.pid));
+    }
     
     // TODO: Determine input type from interface descriptor
     // For now, default to gamepad; keyboard detection would be based on
@@ -221,11 +231,11 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
         // Byte 0: Modifier keys (Ctrl, Shift, Alt, GUI)
         // Byte 1: Reserved
         // Bytes 2-7: Key codes (up to 6 keys)
-        if (len >= 8) {
+        if (len >= KEYBOARD_REPORT_SIZE) {
             current_keyboard_state.modifiers = report[0];
             current_keyboard_state.num_keys = 0;
             
-            for (int i = 2; i < 8 && current_keyboard_state.num_keys < MAX_KEYBOARD_KEYS; i++) {
+            for (int i = KEYBOARD_REPORT_KEY_START; i < KEYBOARD_REPORT_SIZE && current_keyboard_state.num_keys < MAX_KEYBOARD_KEYS; i++) {
                 if (report[i] != 0) {
                     current_keyboard_state.keys[current_keyboard_state.num_keys++] = report[i];
                 }
