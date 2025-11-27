@@ -51,6 +51,7 @@ See [BUILD.md](docs/BUILD.md) for detailed instructions.
 2. Connect board to PC via USB
 3. Copy `joystick_converter.uf2` to the mounted drive
 4. Device will reboot automatically
+5. A new USB serial port should appear (e.g., COM port on Windows, /dev/ttyACM0 on Linux)
 
 ### 3. Use Configuration Tool
 
