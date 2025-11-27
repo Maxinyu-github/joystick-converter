@@ -16,7 +16,7 @@ static uint16_t log_head = 0;  // Write position
 static uint16_t log_tail = 0;  // Read position
 static uint16_t log_count = 0; // Number of entries
 static bool log_overflow = false;
-static log_level_t current_log_level = LOG_LEVEL_INFO;
+static log_level_t current_log_level = LOG_LEVEL_DEBUG;
 
 // Level names for output
 static const char *level_names[] = {
@@ -31,7 +31,7 @@ void logging_init(void) {
     log_tail = 0;
     log_count = 0;
     log_overflow = false;
-    current_log_level = LOG_LEVEL_INFO;
+    current_log_level = LOG_LEVEL_DEBUG;
     memset(log_buffer, 0, LOG_BUFFER_SIZE);
 }
 
