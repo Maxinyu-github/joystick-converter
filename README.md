@@ -25,8 +25,10 @@ A versatile gamepad/joystick converter based on the RP2350-PiZero development bo
 
 ## Hardware Requirements
 
-- **Development Board**: RP2350-PiZero (or compatible RP2350 board)
-- **Interface**: Type-C USB port (for gamepad and PC connection)
+- **Development Board**: Waveshare RP2350-PiZero (or compatible RP2350 board with dual USB)
+- **Interface**: 
+  - **USB Type-C (labeled "USB")**: Connects to PC/gaming machine
+  - **USB Type-C (labeled "PIO-USB")**: Connects to controller/gamepad
 - **Optional**: Status LED (GPIO 25)
 
 ## Quick Start
@@ -150,9 +152,13 @@ See [Debug Mode Guide](docs/DEBUG_MODE.md) for detailed instructions.
 
 ### USB Dual Role
 
-The project uses RP2350's USB capabilities to implement dual role:
-- **USB Host**: Connect and read gamepad input
-- **USB Device**: Output as HID device to PC/console
+The project uses dual USB to support both input and output simultaneously:
+- **Native USB (Type-C labeled "USB")**: USB Device mode for HID output (gamepad/keyboard/mouse) + CDC serial for configuration
+- **PIO-USB (Type-C labeled "PIO-USB")**: USB Host mode for reading gamepad/controller input
+
+This is achieved by using the RP2350's native USB controller for device mode and the Pico-PIO-USB library for host mode on separate GPIO pins.
+
+**System Clock**: The firmware runs at 120MHz (required for PIO-USB compatibility).
 
 ### Configuration Storage
 

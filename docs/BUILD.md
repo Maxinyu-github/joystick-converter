@@ -39,6 +39,12 @@
    export PICO_SDK_PATH=/path/to/pico-sdk
    ```
 
+4. **Pico-PIO-USB Library** (for dual USB support)
+   ```bash
+   # Clone Pico-PIO-USB into SDK's lib directory
+   git clone https://github.com/sekigon-gonnoc/Pico-PIO-USB.git $PICO_SDK_PATH/lib/Pico-PIO-USB
+   ```
+
 ### Optional Tools
 
 - **Build essentials**: `build-essential` (Linux), Xcode Command Line Tools (macOS)
@@ -180,12 +186,12 @@ pyinstaller --onefile --windowed config_tool.py
 
 ### Serial Debug Output
 
-The firmware outputs debug information via UART (GPIO0/GPIO1):
-
-**Note**: Since TinyUSB Host is integrated, the USB port is used for gamepad input. Serial communication requires a USB-to-UART adapter connected to:
+The firmware outputs debug information via UART. Connect a USB-to-UART adapter to:
 - **TX**: GPIO0
 - **RX**: GPIO1
 - **Baud rate**: 115200
+
+**Note**: The native USB port is used for HID device output (gamepad/keyboard/mouse) and CDC serial communication with the PC configuration tool. Debug output goes to the UART pins.
 
 ```bash
 # Linux (with USB-to-UART adapter)
@@ -197,6 +203,17 @@ screen /dev/tty.usbserial* 115200
 # Windows (PuTTY)
 # Use COM port with 115200 baud rate
 ```
+
+### USB Port Configuration (Waveshare RP2350-PiZero)
+
+The firmware uses dual USB:
+- **Native USB (Type-C labeled "USB")**: Connects to PC/gaming machine as USB Device (HID + CDC)
+- **PIO-USB (Type-C labeled "PIO-USB")**: Connects to controller as USB Host
+
+When the device is properly connected:
+1. Connect the controller to the PIO-USB port
+2. Connect the USB port to your PC or gaming machine
+3. Windows/Mac/Linux should recognize the device as a composite HID device
 
 ### SWD Debugging
 

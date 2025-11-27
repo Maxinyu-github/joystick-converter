@@ -24,9 +24,8 @@ static bool config_mode_request = false;
 #define REPORT_ID_KEYBOARD  2
 #define REPORT_ID_MOUSE     3
 
-// Gamepad report structure
+// Gamepad report structure (without report_id - TinyUSB adds it)
 typedef struct __attribute__((packed)) {
-    uint8_t report_id;
     uint16_t buttons;
     int16_t left_x;
     int16_t left_y;
@@ -37,17 +36,15 @@ typedef struct __attribute__((packed)) {
     uint8_t hat;  // D-pad hat switch (0-7 for directions, 8 for center)
 } gamepad_report_t;
 
-// Keyboard report structure
+// Keyboard report structure (without report_id - TinyUSB adds it)
 typedef struct __attribute__((packed)) {
-    uint8_t report_id;
     uint8_t modifiers;
     uint8_t reserved;
     uint8_t keycodes[6];
 } keyboard_report_t;
 
-// Mouse report structure
+// Mouse report structure (without report_id - TinyUSB adds it)
 typedef struct __attribute__((packed)) {
-    uint8_t report_id;
     uint8_t buttons;
     int8_t x;
     int8_t y;
@@ -85,7 +82,6 @@ void usb_device_send_gamepad(uint16_t buttons, int16_t *axes, uint8_t num_axes) 
     }
     
     gamepad_report_t report = {0};
-    report.report_id = REPORT_ID_GAMEPAD;
     report.buttons = buttons;
     
     // Copy axes if provided
@@ -103,7 +99,7 @@ void usb_device_send_gamepad(uint16_t buttons, int16_t *axes, uint8_t num_axes) 
     // Hat switch is centered by default
     report.hat = 8;  // 8 = center/no direction
     
-    tud_hid_report(REPORT_ID_GAMEPAD, &report.buttons, sizeof(report) - 1);  // -1 for report_id
+    tud_hid_report(REPORT_ID_GAMEPAD, &report, sizeof(report));
 }
 
 void usb_device_send_keyboard(uint8_t modifiers, uint8_t *keycodes, uint8_t num_keys) {
@@ -117,7 +113,6 @@ void usb_device_send_keyboard(uint8_t modifiers, uint8_t *keycodes, uint8_t num_
     }
     
     keyboard_report_t report = {0};
-    report.report_id = REPORT_ID_KEYBOARD;
     report.modifiers = modifiers;
     report.reserved = 0;
     
@@ -127,7 +122,7 @@ void usb_device_send_keyboard(uint8_t modifiers, uint8_t *keycodes, uint8_t num_
         memcpy(report.keycodes, keycodes, copy_count);
     }
     
-    tud_hid_report(REPORT_ID_KEYBOARD, &report.modifiers, sizeof(report) - 1);
+    tud_hid_report(REPORT_ID_KEYBOARD, &report, sizeof(report));
 }
 
 void usb_device_send_mouse(uint8_t buttons, int8_t x, int8_t y, int8_t wheel) {
@@ -141,13 +136,12 @@ void usb_device_send_mouse(uint8_t buttons, int8_t x, int8_t y, int8_t wheel) {
     }
     
     mouse_report_t report = {0};
-    report.report_id = REPORT_ID_MOUSE;
     report.buttons = buttons;
     report.x = x;
     report.y = y;
     report.wheel = wheel;
     
-    tud_hid_report(REPORT_ID_MOUSE, &report.buttons, sizeof(report) - 1);
+    tud_hid_report(REPORT_ID_MOUSE, &report, sizeof(report));
 }
 
 bool usb_device_config_mode_requested(void) {
