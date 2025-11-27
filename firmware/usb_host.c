@@ -1,11 +1,14 @@
 /**
  * USB Host Module Implementation
+ * 
+ * Uses TinyUSB host stack for USB HID device support.
  */
 
 #include "usb_host.h"
 #include <stdio.h>
 #include <string.h>
 #include "pico/stdlib.h"
+#include "tusb.h"
 #include "remapping.h"
 #include "logging.h"
 
@@ -74,11 +77,13 @@ static const char* get_input_type_name(input_type_t type) {
 }
 
 bool usb_host_init(void) {
-    LOG_INFO("USB Host: Initializing...");
+    LOG_INFO("USB Host: Initializing TinyUSB host stack...");
     
-    // TODO: Initialize TinyUSB host stack
-    // This would involve setting up USB host controller,
-    // HID class driver for gamepad devices
+    // Initialize TinyUSB host stack
+    if (!tuh_init(BOARD_TUH_RHPORT)) {
+        LOG_ERROR("USB Host: Failed to initialize TinyUSB host");
+        return false;
+    }
     
     memset(&current_gamepad_state, 0, sizeof(current_gamepad_state));
     memset(&current_keyboard_state, 0, sizeof(current_keyboard_state));
@@ -88,17 +93,13 @@ bool usb_host_init(void) {
     keyboard_state_valid = false;
     current_input_type = INPUT_TYPE_UNKNOWN;
     
-    LOG_INFO("USB Host: Initialized (placeholder)");
+    LOG_INFO("USB Host: TinyUSB host stack initialized");
     return true;
 }
 
 void usb_host_task(void) {
-    // TODO: Process USB host events
-    // This would involve:
-    // 1. Polling USB host controller
-    // 2. Processing HID reports from gamepad or keyboard
-    // 3. Updating current state
-    // 4. Calling remapping engine with new state (for gamepad)
+    // Process USB host events via TinyUSB
+    tuh_task();
     
     if (device_connected) {
         if (current_input_type == INPUT_TYPE_GAMEPAD && gamepad_state_valid) {
@@ -144,7 +145,9 @@ bool usb_host_get_device_info(usb_device_info_t *info) {
     return true;
 }
 
-// Callback for when device is mounted (called by TinyUSB)
+// TinyUSB HID Host callbacks
+
+// Callback for when HID device is mounted (called by TinyUSB)
 void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_report, uint16_t desc_len) {
     (void)desc_report;
     (void)desc_len;
@@ -156,51 +159,43 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
     // Log basic mount information
     LOG_INFO("USB Host: Device mounted - addr=%d, instance=%d", dev_addr, instance);
     
-    // TODO: When TinyUSB is integrated, get VID/PID from device descriptor
-    // For now, log with placeholder values
-    // tuh_vid_pid_get(dev_addr, &device_info.vid, &device_info.pid);
+    // Get VID/PID from device descriptor using TinyUSB API
+    tuh_vid_pid_get(dev_addr, &device_info.vid, &device_info.pid);
     
     // Log detailed device info
-    // NOTE: VID/PID will be populated when TinyUSB is integrated
-    // For now they will be 0 until tuh_vid_pid_get() is called
     LOG_DEBUG("USB Host: VID=0x%04X, PID=0x%04X", device_info.vid, device_info.pid);
-    if (device_info.vid == 0 && device_info.pid == 0) {
-        LOG_DEBUG("USB Host: Device info pending TinyUSB integration");
+    LOG_DEBUG("USB Host: Device name: %s", get_device_name(device_info.vid, device_info.pid));
+    
+    // Determine input type from interface protocol using TinyUSB API
+    uint8_t itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
+    
+    // HID interface protocol values:
+    // 0 = None (gamepad/joystick)
+    // 1 = Keyboard
+    // 2 = Mouse
+    if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD) {
+        current_input_type = INPUT_TYPE_KEYBOARD;
+        LOG_INFO("USB Host: Detected keyboard device");
     } else {
-        LOG_DEBUG("USB Host: Device name: %s", get_device_name(device_info.vid, device_info.pid));
+        current_input_type = INPUT_TYPE_GAMEPAD;
+        LOG_INFO("USB Host: Detected gamepad/HID device");
     }
     
-    // TODO: Determine input type from interface descriptor
-    // For now, default to gamepad; keyboard detection would be based on
-    // interface class (0x03 for HID), subclass (0x01 for boot interface),
-    // and protocol (0x01 for keyboard, 0x02 for mouse)
-    
-    // Example HID class values for reference:
-    // Keyboard: class=0x03, subclass=0x01, protocol=0x01
-    // Mouse: class=0x03, subclass=0x01, protocol=0x02
-    // Gamepad: class=0x03, subclass=0x00, protocol=0x00 (typically)
-    
-    // When TinyUSB is integrated:
-    // uint8_t itf_class = tuh_hid_interface_protocol(dev_addr, instance);
-    // if (itf_class == HID_ITF_PROTOCOL_KEYBOARD) {
-    //     current_input_type = INPUT_TYPE_KEYBOARD;
-    // } else {
-    //     current_input_type = INPUT_TYPE_GAMEPAD;
-    // }
-    
-    // For now, default to gamepad
-    current_input_type = INPUT_TYPE_GAMEPAD;
     device_info.input_type = current_input_type;
-    
-    LOG_INFO("USB Host: Input type detected: %s", get_input_type_name(current_input_type));
-    
     device_connected = true;
     
+    // Set protocol to report mode (not boot mode) for full gamepad support
+    if (!tuh_hid_set_protocol(dev_addr, instance, HID_PROTOCOL_REPORT)) {
+        LOG_WARN("USB Host: Failed to set report protocol, using boot protocol");
+    }
+    
     // Request first HID report
-    // tuh_hid_receive_report(dev_addr, instance);
+    if (!tuh_hid_receive_report(dev_addr, instance)) {
+        LOG_ERROR("USB Host: Failed to request HID report");
+    }
 }
 
-// Callback for when device is unmounted (called by TinyUSB)
+// Callback for when HID device is unmounted (called by TinyUSB)
 void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance) {
     LOG_INFO("USB Host: Device unmounted - addr=%d, instance=%d", dev_addr, instance);
     
@@ -222,9 +217,6 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance) {
 
 // Callback for HID report received (called by TinyUSB)
 void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len) {
-    (void)dev_addr;
-    (void)instance;
-    
     if (current_input_type == INPUT_TYPE_KEYBOARD) {
         // Parse keyboard HID report (standard boot protocol keyboard)
         // Boot protocol keyboard report format (8 bytes):
@@ -272,6 +264,6 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
         }
     }
     
-    // Request next report
-    // tuh_hid_receive_report(dev_addr, instance);
+    // Request next report from TinyUSB
+    tuh_hid_receive_report(dev_addr, instance);
 }

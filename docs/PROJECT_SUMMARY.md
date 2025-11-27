@@ -211,10 +211,10 @@ This project implements a comprehensive joystick/gamepad converter for the RP235
 ## Future Enhancements
 
 ### Planned Features
-1. **Complete TinyUSB Integration**
-   - Full USB host stack
-   - Complete USB device stack
-   - Multiple device support
+1. **USB Device Integration (PIO-USB)**
+   - PIO-USB for device output
+   - HID device support for gamepad/keyboard/mouse output
+   - Dual USB operation (host and device simultaneously)
 
 2. **Extended Gamepad Support**
    - More controller types

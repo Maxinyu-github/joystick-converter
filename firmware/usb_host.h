@@ -2,6 +2,7 @@
  * USB Host Module
  * 
  * Handles USB host functionality for receiving gamepad input.
+ * Uses TinyUSB host stack for USB HID device support.
  */
 
 #ifndef USB_HOST_H
@@ -10,17 +11,17 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-// Gamepad button definitions
-#define GAMEPAD_BUTTON_A       (1 << 0)
-#define GAMEPAD_BUTTON_B       (1 << 1)
-#define GAMEPAD_BUTTON_X       (1 << 2)
-#define GAMEPAD_BUTTON_Y       (1 << 3)
-#define GAMEPAD_BUTTON_LB      (1 << 4)
-#define GAMEPAD_BUTTON_RB      (1 << 5)
-#define GAMEPAD_BUTTON_BACK    (1 << 6)
-#define GAMEPAD_BUTTON_START   (1 << 7)
-#define GAMEPAD_BUTTON_LS      (1 << 8)
-#define GAMEPAD_BUTTON_RS      (1 << 9)
+// Gamepad button definitions (using JC_ prefix to avoid conflict with TinyUSB)
+#define JC_BUTTON_A       (1 << 0)
+#define JC_BUTTON_B       (1 << 1)
+#define JC_BUTTON_X       (1 << 2)
+#define JC_BUTTON_Y       (1 << 3)
+#define JC_BUTTON_LB      (1 << 4)
+#define JC_BUTTON_RB      (1 << 5)
+#define JC_BUTTON_BACK    (1 << 6)
+#define JC_BUTTON_START   (1 << 7)
+#define JC_BUTTON_LS      (1 << 8)
+#define JC_BUTTON_RS      (1 << 9)
 
 // Input device types
 typedef enum {
